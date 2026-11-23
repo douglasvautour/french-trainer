@@ -1,5 +1,5 @@
 /* Offline support: cache the app shell, and Google Fonts once they've loaded. */
-const VERSION = 'apprenez-v9';
+const VERSION = 'apprenez-v10';
 const SHELL = [
   './', 'index.html', 'app.js', 'verbs.js', 'verbs-data.js', 'sentences.js', 'guide.js', 'manifest.webmanifest',
   'fonts/montserrat-400.woff', 'fonts/montserrat-600.woff', 'fonts/crimson-400.woff', 'fonts/crimson-700.woff',
@@ -7,7 +7,7 @@ const SHELL = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -27,7 +27,8 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate' || /\.(html|js|webmanifest)$/.test(url.pathname)) {
     // Network first for app code so updates arrive; fall back to cache offline.
     e.respondWith(
-      fetch(req).then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); return res; })
+      // 'no-cache' asks the server each time instead of trusting the phone's HTTP cache.
+      fetch(req.mode === 'navigate' ? req.url : req, { cache: 'no-cache' }).then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); return res; })
         .catch(() => caches.match(req).then(r => r || caches.match('index.html')))
     );
     return;

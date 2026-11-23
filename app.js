@@ -1,5 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
+  const APP_VERSION = '10';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -590,6 +591,7 @@
           </section>
           <p class="foot muted">Your progress is stored only on this device.</p>
           <p class="foot muted credits">Verb conjugations from the <a href="https://pauillac.inria.fr/~sagot/index.html#lefff">Lefff</a> by Benoît Sagot (Inria), used under the <a href="data/LICENSE-LGPLLR.txt">LGPL-LR licence</a>.</p>
+          <p class="foot muted credits">App version ${APP_VERSION}</p>
         </div>
       </div>`);
 
@@ -1058,6 +1060,19 @@
     if (window.Verbs && window.Verbs.VERBS.length && !window.Verbs.VERBS.some(v => v.pats)) out.push('verbs-data.js (an older version is on the site)');
     return out;
   }
+  // Service worker: check for a new version every time the app is opened or brought back,
+  // and reload once when a new version takes over.
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController && !reloaded) { reloaded = true; location.reload(); }
+    });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    }).catch(() => {});
+  }
   const missing = missingFiles();
   if (missing.length) {
     document.getElementById('app').innerHTML = `<main class="screen home"><header class="home-head"><h1>Apprenez le français&nbsp;!</h1><div class="rule"></div></header>
@@ -1066,7 +1081,4 @@
     return;
   }
   render();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
-  }
 })();
