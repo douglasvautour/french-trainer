@@ -21,7 +21,7 @@ for f in ('glosses.txt', 'extras.txt'):
         inf, g = line.rstrip('\n').split('=', 1)
         if g != '!': wanted.add(inf.lstrip('~'))
 
-TENSE = {'P': 'present', 'I': 'imparfait', 'J': 'ps', 'F': 'futur', 'C': 'cond', 'S': 'subj'}
+TENSE = {'P': 'present', 'I': 'imparfait', 'J': 'ps', 'F': 'futur', 'C': 'cond', 'S': 'subj', 'Y': 'imperatif'}
 forms = collections.defaultdict(lambda: collections.defaultdict(list))  # lemma -> (tense, slot) -> [forms]
 for line in open(MLEX, encoding='utf-8'):
     p = line.rstrip('\n').split('\t')
@@ -65,11 +65,11 @@ today = datetime.date.today().isoformat()
 with open(OUT, 'w', encoding='utf-8') as o:
     o.write('# Derived from the Lefff 3.4 (Lexique des Formes Fléchies du Français) by Benoît Sagot, Inria.\n')
     o.write('# Distributed under the LGPL-LR licence: see LICENSE-LGPLLR.txt in this folder.\n')
-    o.write(f'# Modified {today}: extracted the verbs used by "Apprenez le français !" (simple tenses and\n')
+    o.write(f'# Modified {today}: extracted the verbs used by "Apprenez le français !" (simple tenses, imperative and\n')
     o.write('# masculine singular past participle), regrouped by tense and person, alternative spellings\n')
     o.write('# joined with "/" with the traditional spelling first. Corrected: inclure/occlure past participle\n')
     o.write('# (inclus, occlus), "il tait" (taire), and the present of enamourer/énamourer (enamoure).\n')
-    o.write('# Columns: infinitive, tense (present imparfait futur cond subj ps, or pp), person 0-5 (je..ils, "-" for pp), forms\n')
+    o.write('# Columns: infinitive, tense (present imparfait futur cond subj ps imperatif, or pp), person 0-5 (je..ils, "-" for pp), forms\n')
     for lemma in sorted(forms):
         for key in sorted(forms[lemma]):
             o.write('\t'.join([lemma, key[0], key[1], '/'.join(order(lemma, key, forms[lemma][key]))]) + '\n')

@@ -24,7 +24,7 @@
     objPron: { do: true, io: true, refl: true, y: true, en: true },
     pronouns: Object.fromEntries(V.PRONOUNS.map(p => [p, true])),
     tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
-    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incomplete: false },
+    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false },
   });
   const EMPTY_DATA = () => ({ custom: [], excluded: [], forms: {}, events: [] });
   function merge(def, val) {
@@ -81,7 +81,7 @@
     saveData();
   }
   const isCustom = id => data.custom.includes(id);
-  const isExcluded = id => data.excluded.includes(id);
+  data.excluded = []; // excluding verbs from lists was removed; nothing stays hidden
   const groupIds = key => V.VERBS.filter(v => (key === 'common' ? v.common : v.group === +key.slice(1))).map(v => v.id);
   function toggleCustom(id) {
     if (isCustom(id)) data.custom = data.custom.filter(x => x !== id); else data.custom.push(id);
@@ -96,8 +96,7 @@
   function buildPool() {
     const T = selTenses(), P = selPronouns(), src = settings.sources;
     const ids = new Set();
-    ['common', 'g1', 'g2', 'g3'].forEach(k => { if (src[k]) groupIds(k).forEach(id => { if (!isExcluded(id)) ids.add(id); }); });
-    if (src.incomplete) incompleteVerbs().forEach(id => { if (!isExcluded(id)) ids.add(id); });
+    ['common', 'g1', 'g2', 'g3'].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
     if (src.custom) data.custom.forEach(id => { if (V.BY_ID[id]) ids.add(id); });
     const verbs = [...ids];
     const forms = [];
@@ -198,7 +197,7 @@
   // One colour per tense, in checklist order (deep shades of a pastel rainbow)
   const TENSE_COLOR = {
     present: '#872222', pc: '#874C22', imparfait: '#876D22', futur: '#4C8722', cond: '#228754',
-    pqp: '#228787', fa: '#225D87', subj: '#222A87', cp: '#542287', ps: '#872265',
+    pqp: '#228787', fa: '#225D87', subj: '#222A87', cp: '#542287', ps: '#872265', imperatif: '#7A4A1E',
   };
 
   /* ---------------- Icons ---------------- */
@@ -214,6 +213,7 @@
     cross: svg('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>', 'stroke-width="2.4"'),
     write: svg('<path d="M13 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V11"/><path d="M8 13h3M8 17h7"/><path d="M18.6 2.6l2.3 2.3-7.1 7.1-3 .7.7-3z"/>'),
     tap: svg('<path d="M9.5 14V6.5a1.5 1.5 0 0 1 3 0V12"/><path d="M12.5 11a1.5 1.5 0 0 1 3 0v1.5"/><path d="M15.5 12a1.5 1.5 0 0 1 3 0v3.5a5.5 5.5 0 0 1-5.5 5.5h-1a5.2 5.2 0 0 1-4.3-2.3l-2.3-3.4a1.5 1.5 0 0 1 2.4-1.8l1.2 1.5"/><path d="M6.3 4.3 5 3M15.7 4.3 17 3M11 2.2V1"/>'),
+    book: svg('<path d="M12 6.5C10 5 7.5 4.5 4 4.8v13.4c3.5-.3 6 .2 8 1.8 2-1.6 4.5-2.1 8-1.8V4.8c-3.5-.3-6 .2-8 1.7z"/><path d="M12 6.5V20"/>'),
     verbs: svg('<path d="M4 5.5h10M4 10h7M4 14.5h10M4 19h6"/><path d="M16.5 13.5l2 2 3.5-4"/>'),
   };
 
@@ -233,7 +233,7 @@
   function render() {
     const app = $('#app');
     app.innerHTML = '';
-    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb }[view]());
+    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb, guide: viewGuide }[view]());
   }
 
   let toastTimer;
@@ -258,7 +258,7 @@
           <li>
             <button class="module" data-go="quiz">
               <span class="m-icon">${ICON.verbs}</span>
-              <span class="m-text"><span class="m-title">Verb Trainer</span><span class="m-sub">${n} verbs · ${V.TENSES.length} tenses</span></span>
+              <span class="m-text"><span class="m-title">Verbs &amp; Pronouns</span><span class="m-sub">${n} verbs · ${V.TENSES.length} tenses</span></span>
               <span class="m-chev">${ICON.chev}</span>
             </button>
           </li>
@@ -276,9 +276,10 @@
       <div class="screen quiz">
         <header class="bar">
           <button class="icon" data-act="home" aria-label="Back to home">${ICON.back}</button>
-          <div class="bar-title">Verb Trainer</div>
+          <div class="bar-title">Verbs &amp; Pronouns</div>
           <div class="bar-right">
             <button class="icon star" data-act="star" aria-label="Add verb to Custom list" ${showQ ? '' : 'disabled'}>${ICON.star}</button>
+            <button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button>
             <button class="icon" data-act="progress" aria-label="Progress">${ICON.target}</button>
             <button class="icon" data-act="settings" aria-label="Settings">${ICON.gear}</button>
           </div>
@@ -289,6 +290,7 @@
       </div>`);
     $('[data-act="home"]', node).onclick = () => go('home');
     $('[data-act="progress"]', node).onclick = () => go('progress');
+    $('[data-act="guide"]', node).onclick = () => openGuide();
     $('[data-act="settings"]', node).onclick = () => go('settings');
     const starBtn = $('[data-act="star"]', node);
     const qa = $('.q-area', node), aa = $('.a-area', node);
@@ -316,12 +318,13 @@
     // Question
     const tl = V.TENSE_LABEL[q.tense];
     const blankHtml = `<span class="blank"><span class="blank-fill"></span></span>`;
-    const scaffold = (q.before ? esc(cap(q.before)) + (q.before.endsWith("'") ? '' : ' ') : '') + blankHtml + (q.after ? ' ' + esc(q.after) : '');
+    const scaffold = (q.before ? esc(cap(q.before)) + (/['-]$/.test(q.before) ? '' : ' ') : '') + blankHtml + (q.after ? (q.after.startsWith('-') ? '' : ' ') + esc(q.after) : '');
     const sentence = q.form === 'fr' ? scaffold : esc(q.english);
     // subtitle: English subject (when you type it) • infinitive • English for the other pronouns (when you type them)
     const askPron = q.form === 'fr' && q.mode !== 'verb';
+    const imp = q.tense === 'imperatif';
     const hintParts = [];
-    if (askPron) hintParts.push(`<span class="cue">${esc(V.englishSubject(q.pronoun, q.verb))}</span>`);
+    if (askPron || (imp && q.form === 'fr')) hintParts.push(`<span class="cue">${esc(imp ? { tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun] : V.englishSubject(q.pronoun, q.verb))}</span>`);
     hintParts.push(`<span lang="fr">${esc(q.verb.id)}</span>`);
     if (askPron && q.cue) hintParts.push(`<span class="cue">${esc(q.cue)}</span>`);
     qa.innerHTML = `
@@ -382,11 +385,11 @@
         } else if (quiz.tries >= 3) {
           input.value = quiz.draft = q.ans.blank;
           input.classList.add('revealed');
-          setMsg(r === 'accent' ? 'Check your accents.' : 'Not quite.', 'bad', 'The correct answer is shown above.');
+          setMsg(r === 'accent' ? 'Check your accents.' : r === 'hyphen' ? 'Check your hyphens.' : 'Not quite.', 'bad', 'The correct answer is shown above.');
           fillBlank(q.ans.blank, false); finishQ(false); done();
         } else {
           const left = 3 - quiz.tries;
-          setMsg(r === 'accent' ? 'Check your accents.' : 'Try again.', 'warn', `${left} ${left === 1 ? 'try' : 'tries'} left`);
+          setMsg(r === 'accent' ? 'Check your accents.' : r === 'hyphen' ? 'Check your hyphens.' : 'Try again.', 'warn', `${left} ${left === 1 ? 'try' : 'tries'} left`);
           input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
           input.focus();
         }
@@ -481,14 +484,12 @@
     custom: { label: 'Custom', sub: 'verbs you starred', action: 'Remove' },
     review: { label: 'In Review', sub: 'forms you’ve been quizzed on', action: 'Remove' },
     learned: { label: 'Learned', sub: 'answered correctly 5 times in a row', action: 'Remove' },
-    incomplete: { label: 'Incomplete Verbs', sub: 'started, but not every form learned', action: 'Exclude' },
   };
   function sourceCount(key) {
     if (key === 'custom') return data.custom.length;
     if (key === 'review') return reviewKeys().length;
     if (key === 'learned') return learnedKeys().length;
-    if (key === 'incomplete') return incompleteVerbs().filter(id => !isExcluded(id)).length;
-    return groupIds(key).filter(id => !isExcluded(id)).length;
+    return groupIds(key).length;
   }
 
   function viewSettings() {
@@ -584,7 +585,7 @@
 
           <section class="group danger-zone">
             <h2>Delete Data</h2>
-            <p class="muted">Removes all of your results, your In Review and Learned lists, your Custom verbs and the verbs you excluded. Your settings and the verb lists themselves are kept.</p>
+            <p class="muted">Removes all of your results, your In Review and Learned lists, and your Custom verbs. Your settings and the verb lists themselves are kept.</p>
             <button class="btn danger" data-act="delete">Delete Data</button>
           </section>
           <p class="foot muted">Your progress is stored only on this device.</p>
@@ -606,7 +607,7 @@
       $$('input[type=checkbox]', set).forEach(inp => inp.onchange = () => { s[key][inp.dataset.id] = inp.checked; saveSettings(); warn(); });
     });
     warn();
-    $$('[data-list]', node).forEach(b => b.onclick = () => { listKey = b.dataset.list; listSearch = ''; listMode = 'active'; go('list'); });
+    $$('[data-list]', node).forEach(b => b.onclick = () => { listKey = b.dataset.list; listSearch = ''; go('list'); });
     $('[data-act="backup"]', node).onclick = saveBackup;
     const fileIn = $('#restore-file', node);
     $('[data-act="restore"]', node).onclick = () => fileIn.click();
@@ -698,7 +699,7 @@
   }
 
   /* ---------------- Verb list pages ---------------- */
-  let listKey = 'common', listSearch = '', listMode = 'active', settingsScroll = 0;
+  let listKey = 'common', listSearch = '', settingsScroll = 0;
   let listRestore = null, listShown = 0, verbId = null;
   const CHUNK = 80;
 
@@ -724,28 +725,16 @@
       });
     } else if (listKey === 'custom') {
       items = data.custom.map(verbItem).filter(Boolean);
-    } else if (listKey === 'incomplete') {
-      const vs = verbStats();
-      items = incompleteVerbs().filter(id => !isExcluded(id)).map(id => {
-        const it = verbItem(id), n = V.nForms(V.BY_ID[id]);
-        it.sub = `${vs[id].learned} of ${n} forms learned`;
-        it.right = `<span class="bar"><i style="width:${(vs[id].learned / n) * 100}%"></i></span>`;
-        return it;
-      });
     } else {
-      const ids = groupIds(listKey).filter(id => (listMode === 'excluded') === isExcluded(id));
-      items = ids.map(verbItem);
+      items = groupIds(listKey).map(verbItem);
     }
     return items.filter(it => match(it.title, it.sub, it.match));
   }
 
   function viewList() {
     const src = SOURCES[listKey];
-    const isGroup = ['common', 'g1', 'g2', 'g3'].includes(listKey);
-    const excludedCount = isGroup ? groupIds(listKey).filter(isExcluded).length : 0;
-    if (listMode === 'excluded' && !excludedCount) listMode = 'active';
-    const restoring = listMode === 'excluded';
-    const actionLabel = restoring ? 'Restore' : src.action;
+    const canRemove = listKey === 'custom'; // only Custom lets you remove verbs
+    const actionLabel = 'Remove';
     let items = listItems();
     const total = items.length;
     const node = el(`
@@ -753,21 +742,17 @@
         <header class="bar">
           <button class="icon back-text" data-act="back" aria-label="Back to Settings">${ICON.back}<span>Settings</span></button>
           <div class="bar-title">${esc(src.label)}</div>
-          <div class="bar-right"><button class="text-btn" data-act="edit">Edit</button></div>
+          <div class="bar-right">${canRemove ? '<button class="text-btn" data-act="edit">Edit</button>' : ''}</div>
         </header>
         <div class="list-tools">
           <label class="search"><span class="sr">Search</span>
             <input type="search" placeholder="Search ${esc(src.label)}" value="${esc(listSearch)}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
           </label>
-          ${isGroup && excludedCount ? `<div class="seg small" role="tablist">
-              <button role="tab" data-mode="active" aria-selected="${!restoring}">Included</button>
-              <button role="tab" data-mode="excluded" aria-selected="${restoring}">Excluded (${fmtNum(excludedCount)})</button>
-            </div>` : ''}
-          <p class="list-count muted"><span data-count>${fmtNum(total)}</span> <span data-noun>${noun(total)}</span>${total ? ` · swipe left to ${actionLabel.toLowerCase()}` : ''}</p>
+          <p class="list-count muted"><span data-count>${fmtNum(total)}</span> <span data-noun>${noun(total)}</span>${total && canRemove ? ' · swipe left to remove' : ''}</p>
         </div>
-        <ul class="swipe-list ${restoring ? 'restoring' : ''}" role="list"></ul>
+        <ul class="swipe-list" role="list"></ul>
         <div class="sentinel"></div>
-        <p class="empty list-empty">${listSearch ? 'No matches.' : restoring ? '' : emptyText(listKey)}</p>
+        <p class="empty list-empty">${listSearch ? 'No matches.' : emptyText(listKey)}</p>
       </div>`);
     const ul = $('.swipe-list', node), sentinel = $('.sentinel', node), emptyP = $('.list-empty', node), countEl = $('[data-count]', node);
     emptyP.hidden = total > 0;
@@ -782,17 +767,19 @@
     const row = it => {
       const li = el(`
         <li class="sw">
-          <button class="sw-act ${restoring ? 'restore' : ''}" tabindex="-1">${actionLabel}</button>
+          ${canRemove ? `<button class="sw-act" tabindex="-1">${actionLabel}</button>` : ''}
           <div class="sw-main">
             <div class="sw-text"><span class="f" ${it.fr ? 'lang="fr"' : ''}>${esc(it.title)}${it.star ? `<span class="chip-star">${ICON.star}</span>` : ''}</span><span class="meta">${esc(it.sub)}</span></div>
             ${it.right || ''}<span class="row-chev">${ICON.chev}</span>
-            <button class="sw-inline ${restoring ? 'restore' : ''}" aria-label="${actionLabel} ${esc(it.title)}">${actionLabel}</button>
+            ${canRemove ? `<button class="sw-inline" aria-label="${actionLabel} ${esc(it.title)}">${actionLabel}</button>` : ''}
           </div>
         </li>`);
       li._item = it;
-      attachSwipe(li, () => act(li));
-      $('.sw-act', li).onclick = () => act(li);
-      $('.sw-inline', li).onclick = e => { e.stopPropagation(); act(li); };
+      if (canRemove) {
+        attachSwipe(li, () => act(li));
+        $('.sw-act', li).onclick = () => act(li);
+        $('.sw-inline', li).onclick = e => { e.stopPropagation(); act(li); };
+      } else li.classList.add('fixed');
       $('.sw-main', li).addEventListener('click', e => {
         if (e.target.closest('.sw-inline') || li.classList.contains('open') || !V.BY_ID[it.verb]) return;
         verbId = it.verb; go('verb');
@@ -801,7 +788,7 @@
     };
     function act(li) {
       const it = li._item;
-      const undo = perform(it.key, restoring);
+      const undo = perform(it.key);
       items = items.filter(x => x !== it); shown--;
       countEl.textContent = fmtNum(items.length); $('[data-noun]', node).textContent = noun(items.length);
       li.style.height = li.offsetHeight + 'px';
@@ -823,8 +810,7 @@
 
     $('[data-act="back"]', node).onclick = () => go('settings');
     const editBtn = $('[data-act="edit"]', node);
-    editBtn.onclick = () => { const on = ul.classList.toggle('editing'); editBtn.textContent = on ? 'Done' : 'Edit'; closeOpenRow(); };
-    $$('[data-mode]', node).forEach(b => b.onclick = () => { listMode = b.dataset.mode; render(); });
+    if (editBtn) editBtn.onclick = () => { const on = ul.classList.toggle('editing'); editBtn.textContent = on ? 'Done' : 'Edit'; closeOpenRow(); };
     const search = $('input[type=search]', node);
     let t;
     search.oninput = () => {
@@ -846,6 +832,18 @@
     const v = V.BY_ID[verbId];
     const backLabel = SOURCES[listKey] ? SOURCES[listKey].label : 'Back';
     const slotLabel = ['je', 'tu', 'il/elle/on', 'nous', 'vous', 'ils/elles'];
+    const dotFor = (tense, slot) => {
+      const f = data.forms[V.formKey(v.id, tense, slot)];
+      if (!f) return '';
+      return f.learnedAt ? '<i class="ldot" title="Learned"></i>' : '<i class="rdot" title="In review"></i>';
+    };
+    const impCell = slot => {
+      const p = V.verbPart(v, 'imperatif', V.SLOT_PRONOUN[slot]);
+      const label = `(${V.SLOT_PRONOUN[slot]})`;
+      if (!p) return `<div class="vf missing"><span class="pr">${label}</span> —</div>`;
+      const refl = v.refl ? '-' + { 1: 'toi', 3: 'nous', 4: 'vous' }[slot] : '';
+      return `<div class="vf"><span class="pr">${label}</span> <span class="fv">${esc(p.canon + refl)}</span>${dotFor('imperatif', slot)}</div>`;
+    };
     const cell = (tense, slot) => {
       const pr = V.SLOT_PRONOUN[slot];
       const p = V.verbPart(v, tense, pr);
@@ -856,31 +854,30 @@
       if (slot === 2 && !v.impersonal) pron = pron.replace(/^il/, 'il/elle/on');
       if (slot === 5) pron = pron.replace(/^ils/, 'ils/elles');
       const alt = !['pc', 'pqp', 'fa', 'cp'].includes(tense) && p.alts.length > 1 ? `<span class="alt"> or ${esc(p.alts.slice(1).join(', '))}</span>` : '';
-      const f = data.forms[V.formKey(v.id, tense, slot)];
-      const learned = f && f.learnedAt ? '<i class="ldot" title="Learned"></i>' : '';
       const sep = pron.endsWith("'") ? '' : ' ';
-      return `<div class="vf"><span class="pr">${esc(pron)}</span>${sep}<span class="fv">${esc(rest)}</span>${alt}${learned}</div>`;
+      return `<div class="vf"><span class="pr">${esc(pron)}</span>${sep}<span class="fv">${esc(rest)}</span>${alt}${dotFor(tense, slot)}</div>`;
     };
     const node = el(`
       <div class="screen page verb-page">
         <header class="bar">
           <button class="icon back-text" data-act="back" aria-label="Back to ${esc(backLabel)}">${ICON.back}<span>${esc(backLabel)}</span></button>
           <div class="bar-title"></div>
-          <div class="bar-right"><button class="icon star" data-act="star">${ICON.star}</button></div>
+          <div class="bar-right"><button class="icon star" data-act="star">${ICON.star}</button><button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button></div>
         </header>
         <div class="content">
           <h1 class="verb-title" lang="fr">${esc(v.id)}</h1>
           <p class="verb-sub">${esc(V.englishGloss(v))} · ${GROUP_NAME[v.group]} · ${AUX_NAME[v.aux]}</p>
-          <p class="verb-legend"><i class="ldot"></i>learned form</p>
+          <p class="verb-legend"><span><i class="ldot"></i>learned form</span><span><i class="rdot"></i>reviewed form</span></p>
           ${V.TENSES.map(t => `
             <section class="vt">
               <h2 lang="fr" style="color:${TENSE_COLOR[t.id]}">${esc(t.label)}</h2>
               <div class="q-rule"></div>
-              <div class="vgrid" lang="fr">${[0, 3, 1, 4, 2, 5].map(s => cell(t.id, s)).join('')}</div>
+              <div class="vgrid" lang="fr">${t.id === 'imperatif' ? [1, 3, 4].map(impCell).join('') : [0, 3, 1, 4, 2, 5].map(s => cell(t.id, s)).join('')}</div>
             </section>`).join('')}
         </div>
       </div>`);
     $('[data-act="back"]', node).onclick = () => go('list');
+    $('[data-act="guide"]', node).onclick = () => openGuide();
     const star = $('[data-act="star"]', node);
     const setStar = () => {
       const on = isCustom(v.id);
@@ -894,33 +891,16 @@
 
   function emptyText(key) {
     return {
-      custom: 'Tap the star on a quiz question to add its verb here.',
+      custom: 'Tap the star on a quiz question or verb page to add the verb here.',
       review: 'Forms appear here after you answer them in a quiz.',
       learned: 'Nothing learned yet. Answer a form correctly five times in a row to learn it.',
-      incomplete: 'Verbs you’ve started appear here until all their forms are learned.',
-    }[key] || 'Every verb in this list is excluded.';
+    }[key] || 'No verbs in this list.';
   }
-  function undoMessage(it) {
-    if (listKey === 'custom') return `Removed ${it.title} from Custom`;
-    if (listKey === 'review' || listKey === 'learned') return `Removed ${it.title}`;
-    return listMode === 'excluded' ? `${it.title} is back in your study lists` : `Excluded ${it.title} from study`;
-  }
-  // Apply the list action and return an undo function
-  function perform(key, restoring) {
-    if (listKey === 'custom') {
-      const i = data.custom.indexOf(key); data.custom.splice(i, 1); saveData();
-      return () => { data.custom.splice(i, 0, key); saveData(); };
-    }
-    if (listKey === 'review' || listKey === 'learned') {
-      const rec = data.forms[key]; delete data.forms[key]; saveData();
-      return () => { data.forms[key] = rec; saveData(); };
-    }
-    if (restoring) {
-      data.excluded = data.excluded.filter(x => x !== key); saveData();
-      return () => { data.excluded.push(key); saveData(); };
-    }
-    data.excluded.push(key); saveData();
-    return () => { data.excluded = data.excluded.filter(x => x !== key); saveData(); };
+  function undoMessage(it) { return `Removed ${it.title} from Custom`; }
+  // Remove a verb from Custom and return an undo function
+  function perform(key) {
+    const i = data.custom.indexOf(key); data.custom.splice(i, 1); saveData();
+    return () => { data.custom.splice(i, 0, key); saveData(); };
   }
 
   /* Swipe left on a row to reveal its action; a long swipe performs it. */
@@ -972,6 +952,40 @@
     const hide = () => { t.classList.remove('show', 'has-action'); };
     $('.undo', t).onclick = () => { hide(); undo(); };
     undoTimer = setTimeout(hide, 5000);
+  }
+
+  /* ---------------- Grammar guide ---------------- */
+  let guideFrom = 'quiz', guideScroll = 0;
+  function openGuide() { guideFrom = view; guideScroll = window.scrollY; go('guide'); }
+  function viewGuide() {
+    const G = window.GUIDE;
+    const item = (x, color) => `
+      <section class="gd">
+        <h3 lang="fr"${color ? ` style="color:${color}"` : ''}>${esc(x.title)}</h3>
+        <div class="q-rule"></div>
+        ${x.list ? `<p class="gd-list" lang="fr">${esc(x.list)}</p>` : ''}
+        <p>${esc(x.use)}</p>
+        ${x.form ? `<p class="gd-form"><strong>How it’s formed.</strong> ${esc(x.form)}</p>` : ''}
+        <ul class="gd-ex">${x.ex.map(([fr, en]) => `<li><span class="fr" lang="fr">${esc(fr)}</span><span class="en">${esc(en)}</span></li>`).join('')}</ul>
+      </section>`;
+    const node = el(`
+      <div class="screen page guide-page">
+        <header class="bar">
+          <button class="icon" data-act="close" aria-label="Close guide">${ICON.close}</button>
+          <div class="bar-title">Grammar Guide</div>
+          <div class="bar-right"></div>
+        </header>
+        <div class="content">
+          <nav class="gd-jump"><a href="#" data-jump="g-verbs">Verbs</a><a href="#" data-jump="g-pron">Pronouns</a></nav>
+          <h2 class="gd-h" id="g-verbs">Verbs</h2>
+          ${G.verbs.map(x => item(x, TENSE_COLOR[x.id])).join('')}
+          <h2 class="gd-h" id="g-pron">Pronouns</h2>
+          ${G.pronouns.map(x => item(x)).join('')}
+        </div>
+      </div>`);
+    $('[data-act="close"]', node).onclick = () => { const y = guideScroll; go(guideFrom); if (guideFrom !== 'quiz') requestAnimationFrame(() => window.scrollTo(0, y)); };
+    $$('[data-jump]', node).forEach(a => a.onclick = e => { e.preventDefault(); const t = $('#' + a.dataset.jump, node); window.scrollTo({ top: t.getBoundingClientRect().top + window.scrollY - 70, behavior: 'smooth' }); });
+    return node;
   }
 
   /* ---------------- Progress ---------------- */
@@ -1040,6 +1054,7 @@
     if (!window.VERB_DATA) out.push('verbs-data.js');
     if (!window.Verbs) out.push('verbs.js');
     if (!window.Sentences) out.push('sentences.js');
+    if (!window.GUIDE) out.push('guide.js');
     if (window.Verbs && window.Verbs.VERBS.length && !window.Verbs.VERBS.some(v => v.pats)) out.push('verbs-data.js (an older version is on the site)');
     return out;
   }

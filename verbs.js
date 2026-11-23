@@ -13,6 +13,7 @@
     ['subj', 'subjonctif présent'],
     ['cp', 'conditionnel passé'],
     ['ps', 'passé simple'],
+    ['imperatif', 'impératif'],
   ].map(([id, label]) => ({ id, label }));
   const TENSE_LABEL = Object.fromEntries(TENSES.map(t => [t.id, t.label]));
 
@@ -52,7 +53,7 @@
     'harnacher harponner hasarder hâter hausser héler hennir hérisser heurter hisser hocher honnir hoqueter houer houspiller ' +
     'huer hululer hurler').split(' '));
   const elides = (word, v) => VOWEL.test(word) && !(/^h/i.test(word) && v && H_ASPIRE.has(v.inf));
-  const ORDER = ['present', 'imparfait', 'futur', 'cond', 'subj', 'ps'];
+  const ORDER = ['present', 'imparfait', 'futur', 'cond', 'subj', 'ps', 'imperatif'];
   const DIG = '0123456789abcdefghijklmnopqrstuvwxyz';
   const D = root.VERB_DATA || { T: [], V: '', C: [] };
   const TPL = D.T.map(t => t.split(','));
@@ -114,7 +115,9 @@
       S.ps = END.ps_i.map(e => b + e);
       pp = b + 'u';
     }
-    for (const t in S) S[t] = S[t].map(f => [f]);
+    const pr = S.present;
+    S.imperatif = [null, d.type === 'er' ? pr[1].replace(/s$/, '') : pr[1], null, pr[3], pr[4], null];
+    for (const t in S) S[t] = S[t].map(f => (f ? [f] : []));
     return { inf, id: '~' + inf, refl: d.refl, aux: d.aux, S, ppA: [pp] };
   }
 
@@ -203,13 +206,17 @@
       case 'pqp': vp = 'had ' + ppF; break;
       case 'fa': vp = 'will have ' + ppF; break;
       case 'cp': vp = 'would have ' + ppF; break;
-      case 'subj': vp = base; break;
+      case 'subj': case 'imperatif': vp = base; break;
     }
     vp = vp.replace(/\boneself\b/g, EN_SELF[pronoun][0]).replace(/\bone's\b/g, EN_SELF[pronoun][1]);
     const end = / to$/.test(vp) ? '…' : '.';
     forms(v);
     const subj = v.impersonal && pronoun === 'il' ? 'it' : EN_SUBJ[pronoun];
     if (tense === 'subj') return '…that ' + subj + ' ' + vp + end;
+    if (tense === 'imperatif') {
+      const s = pronoun === 'nous' ? "Let's " + vp : vp;
+      return s.charAt(0).toUpperCase() + s.slice(1) + '!' + (pronoun === 'tu' ? ' (sing.)' : pronoun === 'vous' ? ' (pl.)' : '');
+    }
     const s = subj + ' ' + vp;
     return s.charAt(0).toUpperCase() + s.slice(1) + end;
   }
@@ -231,11 +238,14 @@
     if (acc.includes(n)) return 'correct';
     const ns = strip(n);
     if (acc.some(a => strip(a) === ns)) return 'accent';
+    const dh = x => strip(x).replace(/-/g, ' ').replace(/\s+/g, ' ').trim(); // donne le moi -> donne-le-moi
+    if (acc.some(a => dh(a) === dh(n))) return 'hyphen';
     return 'wrong';
   }
 
   /* ---------- Multiple-choice distractors ---------- */
   const CONFUSE = {
+    imperatif: ['present', 'subj'],
     present: ['subj', 'ps', 'imparfait'], pc: ['pqp', 'ps', 'fa'], imparfait: ['cond', 'present', 'ps'],
     futur: ['cond', 'present'], cond: ['futur', 'imparfait'], pqp: ['pc', 'cp'], fa: ['cp', 'futur'],
     subj: ['present', 'imparfait'], cp: ['fa', 'pqp'], ps: ['imparfait', 'pc', 'present'],

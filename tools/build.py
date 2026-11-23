@@ -61,7 +61,7 @@ ETRE = set('aller arriver venir devenir revenir parvenir survenir intervenir adv
 BOTH = set('monter remonter descendre sortir ressortir retourner passer'.split())  # être canonical, avoir accepted
 
 # ---------- forms ----------
-ORDER = ['present', 'imparfait', 'futur', 'cond', 'subj', 'ps']
+ORDER = ['present', 'imparfait', 'futur', 'cond', 'subj', 'ps', 'imperatif']
 IMPERSONAL = set('falloir neiger grêler bruiner brumer crachiner neigeoter pleuviner pleuvioter venter pleuvoir repleuvoir'.split())
 
 def enc(form, inf):

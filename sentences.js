@@ -143,11 +143,71 @@
       vv = Object.assign({}, vv, { enF: vv.enF.map(x => x.replace(new RegExp(' ' + m[1] + '$'), '')) });
       t = '{o} ' + m[1];
     }
-    let s = V.english(vv, tense, pronoun);
+    const s = V.english(vv, tense, pronoun);
     const tail = fillTail(t, spec);
     if (!tail) return s;
-    const end = s.endsWith('…') ? '…' : '.';
-    return s.slice(0, -end.length) + ' ' + tail + (end === '…' ? '.' : end);
+    const m2 = s.match(/^(.*?)([.…!])( \((?:sing|pl)\.\))?$/);
+    const punct = m2[2] === '…' ? '.' : m2[2];
+    return m2[1] + ' ' + tail + punct + (m2[3] || '');
+  }
+
+  /* ---------- Imperative: pronouns follow the verb (donne-le-moi, vas-y, lève-toi) ---------- */
+  const IMP_REFL = { tu: 'toi', nous: 'nous', vous: 'vous' };
+  // verbs whose imperative isn't used for ordinary commands
+  const IMP_SKIP = new Set('avoir vouloir pouvoir devoir valoir falloir sembler paraître naître mourir pleuvoir neiger geler savoir'.split(' '));
+  const STRONG = { me: 'moi', te: 'toi' };
+  function impClitics(spec, pronoun) {
+    const out = [];
+    if (spec.refl) out.push(IMP_REFL[pronoun]);
+    if (spec.do) out.push(spec.do.p);
+    if (spec.io) out.push(spec.io.p);
+    if (spec.y) out.push('y');
+    if (spec.en) out.push('en');
+    return out;
+  }
+  // render the pronouns after the verb: ["le","me"] -> "le-moi", ["me","en"] -> "m'en"
+  function impTail(cl, strongForms = true) {
+    let str = '';
+    cl.forEach((w, i) => {
+      const next = cl[i + 1];
+      let x = w;
+      if ((w === 'me' || w === 'te' || w === 'moi' || w === 'toi') && (next === 'y' || next === 'en')) x = w[0] + "'";
+      else if (strongForms && STRONG[w]) x = STRONG[w];
+      str += (i === 0 || str.endsWith("'") ? '' : '-') + x;
+    });
+    return str;
+  }
+  // tu-forms ending in a vowel take an s before y/en: manges-en, vas-y
+  const impVerb = (form, pronoun, cl) => (pronoun === 'tu' && (cl[0] === 'y' || cl[0] === 'en') && /[ea]$/.test(form) ? form + 's' : form);
+
+  function buildImperative(v, pronoun, pat, mode) {
+    if (!['tu', 'nous', 'vous'].includes(pronoun)) return null;
+    if (/R\+(y|do)|do\+y/.test(pat.type)) return null; // awkward in the imperative
+    if (IMP_SKIP.has(v.inf) || (pat.type === 'S' && v.inf === 'être')) return null;
+    const p = V.verbPart(v, 'imperatif', pronoun);
+    if (!p) return null;
+    const spec = makeSpec(pat, pronoun);
+    const cl = impClitics(spec, pronoun);
+    if (mode === 'pron' && !cl.length) return null;
+    const tail = impTail(cl);
+    const forms = p.alts.map(f => impVerb(f, pronoun, cl));
+    const fulls = forms.map(f => f + (tail ? '-' + tail : ''));
+    let ans, before = '', after = '';
+    if (mode === 'verb') { ans = { blank: forms[0], acceptBlank: forms, acceptFull: fulls, full: fulls[0] }; after = tail ? '-' + tail : ''; }
+    else if (mode === 'pron') { ans = { blank: tail, acceptBlank: [tail], acceptFull: fulls, full: fulls[0] }; before = forms[0] + '-'; }
+    else ans = { blank: fulls[0], acceptBlank: fulls, acceptFull: fulls, full: fulls[0] };
+    const cueT = fillTail(pat.tail, spec);
+    const cue = pat.type === 'S' ? '' : pat.type.startsWith('R') && !cueT ? 'reflexive' : cueT;
+    return { ans, before, after, english: english(v, 'imperatif', pronoun, spec, pat), cue, spec, pattern: pat, clitics: cl, imp: true,
+      vf: { forms }, mode };
+  }
+  function impWrong(q, pronoun) {
+    const c = q.clitics, out = [];
+    for (let i = 0; i + 1 < c.length; i++) { const d = c.slice(); [d[i], d[i + 1]] = [d[i + 1], d[i]]; out.push(impTail(d)); }
+    c.forEach((w, i) => (SWAP[w] || []).concat(STRONG[w] ? [w] : []).forEach(x => { const d = c.slice(); d[i] = x; out.push(impTail(d, x !== w || !STRONG[w])); }));
+    if (c.some(w => STRONG[w])) out.push(impTail(c, false)); // donne-le-me
+    ['le', 'lui', 'y', 'en'].forEach(x => { if (!c.includes(x)) out.push(impTail(c.concat([x]))); });
+    return out;
   }
 
   /**
@@ -155,6 +215,7 @@
    * Returns { ans, before, after, english, cue, spec, pattern } or null if the sentence doesn't exist.
    */
   function build(v, tense, pronoun, pat, mode) {
+    if (tense === 'imperatif') return buildImperative(v, pronoun, pat, mode);
     if (pat.type.includes('y') && v.inf === 'aller' && (tense === 'futur' || tense === 'cond')) return null; // j'irai, not j'y irai
     const spec = makeSpec(pat, pronoun);
     const vf = verbForms(v, tense, pronoun, spec);
@@ -220,6 +281,17 @@
   function options(q, v, tense, pronoun) {
     const ok = new Set(q.ans.acceptBlank.map(norm));
     let cands = [];
+    if (q.imp) {
+      const vp = q.vf.forms[0], tail = q.ans.full.slice(vp.length);
+      const wrongV = V.shuffle(V.distractors(v, tense, pronoun).concat(pronoun === 'tu' ? [vp.replace(/s$/, ''), vp.endsWith('s') ? vp : vp + 's'] : []));
+      const wrongT = V.shuffle(impWrong(q, pronoun));
+      if (q.mode === 'verb') cands = wrongV;
+      else if (q.mode === 'pron') cands = wrongT;
+      else cands = V.shuffle(wrongT.map(t => vp + '-' + t).concat(wrongV.map(w => w + tail)).concat(q.clitics.length ? [q.clitics.join(' ') + ' ' + vp] : []));
+      const out = [], seen = new Set(ok);
+      for (const x of cands) { const n = norm(x); if (!x || seen.has(n)) continue; seen.add(n); out.push(x); if (out.length === 3) break; }
+      return out;
+    }
     if (q.mode === 'verb') cands = wrongVerbs(q, v, tense, pronoun);
     else if (q.mode === 'pron') cands = V.shuffle(wrongPrefixes(q, v, pronoun));
     else {
