@@ -235,7 +235,7 @@
     const node = el(`
       <main class="screen home">
         <header class="home-head">
-          <p class="eyebrow">Modules</p>
+          <p class="eyebrow">Let’s Learn French!</p>
           <h1>Apprenez le français&nbsp;!</h1>
           <div class="rule"></div>
         </header>
