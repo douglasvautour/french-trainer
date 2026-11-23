@@ -1034,6 +1034,22 @@
   }
 
   /* ---------------- Boot ---------------- */
+  // If an update was only partly uploaded, say which file is missing instead of failing silently
+  function missingFiles() {
+    const out = [];
+    if (!window.VERB_DATA) out.push('verbs-data.js');
+    if (!window.Verbs) out.push('verbs.js');
+    if (!window.Sentences) out.push('sentences.js');
+    if (window.Verbs && window.Verbs.VERBS.length && !window.Verbs.VERBS.some(v => v.pats)) out.push('verbs-data.js (an older version is on the site)');
+    return out;
+  }
+  const missing = missingFiles();
+  if (missing.length) {
+    document.getElementById('app').innerHTML = `<main class="screen home"><header class="home-head"><h1>Apprenez le français&nbsp;!</h1><div class="rule"></div></header>
+      <p><strong>Some app files are missing or out of date:</strong></p><ul>${missing.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
+      <p class="muted">Upload all the files from the latest zip to your site, then open the app again while online.</p></main>`;
+    return;
+  }
   render();
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });

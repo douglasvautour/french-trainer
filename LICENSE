@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Douglas Vautour
+Copyright (c) 2026 [Your name]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-This licence covers the app code and the English glosses and lists in tools/.
-It does not cover the verb conjugation data (data/lefff-verbs.tsv and
-verbs-data.js), which is derived from the Lefff and distributed under the
+This licence covers the app code and the English glosses, patterns and lists in
+tools/. It does not cover the verb data (data/lefff-verbs.tsv,
+data/lefff-frames.tsv and verbs-data.js), which is derived from the Lefff and distributed under the
 LGPL-LR licence: see data/LICENSE-LGPLLR.txt and README.md.

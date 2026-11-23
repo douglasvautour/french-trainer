@@ -46,4 +46,3 @@ blesser=get hurt|gets hurt|got hurt|gotten hurt|getting hurt
 cacher=hide|hides|hid|hidden|hiding
 coiffer=do one's hair|does one's hair|did one's hair|done one's hair|doing one's hair
 déshabiller=get undressed|gets undressed|got undressed|gotten undressed|getting undressed
-brosser=brush one's teeth|brushes one's teeth|brushed one's teeth|brushed one's teeth|brushing one's teeth
