@@ -61,9 +61,9 @@
   const sortKey = s => s.replace(/^(se |s')/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   const VERBS = D.V.split('\n').filter(Boolean).map(line => {
-    const [inf, t, flags, en] = line.split('\t');
+    const [inf, t, flags, en, pats] = line.split('\t');
     const refl = flags.includes('r');
-    return { inf, id: vid(inf, refl), tpl: +t, group: +flags[0], aux: flags[1], refl, st: flags.includes('s'), enF: en.split('|'), impFlag: flags.includes('i') };
+    return { inf, id: vid(inf, refl), tpl: +t, group: +flags[0], aux: flags[1], refl, st: flags.includes('s'), enF: en.split('|'), impFlag: flags.includes('i'), seIndirect: flags.includes('j'), pats: pats || '' };
   }).sort((a, b) => sortKey(a.id).localeCompare(sortKey(b.id), 'fr') || a.refl - b.refl);
   const BY_ID = Object.fromEntries(VERBS.map(v => [v.id, v]));
   const AVOIR = BY_ID['avoir'], ETRE = BY_ID['être'];
@@ -139,7 +139,7 @@
     for (const x of auxes) {
       const af = forms(x === 'e' ? ETRE : AVOIR)[AUX_TENSE[tense]][s][0];
       for (const pp of v.ppA) {
-        if (x === 'e') AGREE[pronoun].forEach(ag => alts.push(af + ' ' + pp + (pp.endsWith('s') && ag === 's' ? '' : ag)));
+        if (x === 'e' && !v.seIndirect) AGREE[pronoun].forEach(ag => alts.push(af + ' ' + pp + (pp.endsWith('s') && ag === 's' ? '' : ag)));
         else alts.push(af + ' ' + pp);
       }
     }
@@ -207,7 +207,8 @@
     }
     vp = vp.replace(/\boneself\b/g, EN_SELF[pronoun][0]).replace(/\bone's\b/g, EN_SELF[pronoun][1]);
     const end = / to$/.test(vp) ? '…' : '.';
-    const subj = EN_SUBJ[pronoun];
+    forms(v);
+    const subj = v.impersonal && pronoun === 'il' ? 'it' : EN_SUBJ[pronoun];
     if (tense === 'subj') return '…that ' + subj + ' ' + vp + end;
     const s = subj + ' ' + vp;
     return s.charAt(0).toUpperCase() + s.slice(1) + end;
@@ -308,6 +309,8 @@
     TENSES, TENSE_LABEL, PRONOUNS, SLOT, SLOT_PRONOUN, SLOT_LABEL,
     VERBS, BY_ID, COMMON, nForms, englishGloss, sortKey, verbPart, assemble, answer, english, check, norm, strip, distractors,
     formKey, parseKey, formLabel, shuffle,
+    isHAspire: v => H_ASPIRE.has(v.inf),
+    englishSubject: (pronoun, v) => { if (v) forms(v); return v && v.impersonal && pronoun === 'il' ? 'it' : EN_SUBJ[pronoun]; },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.Verbs = API;

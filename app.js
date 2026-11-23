@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   const V = window.Verbs;
+  const S = window.Sentences;
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const el = html => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -19,6 +20,8 @@
     num: 10,
     types: { fill: true, mc: true },
     forms: { en: true, fr: true },
+    answerForms: { verb: true, pron: true },
+    objPron: { do: true, io: true, refl: true, y: true, en: true },
     pronouns: Object.fromEntries(V.PRONOUNS.map(p => [p, true])),
     tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
     sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incomplete: false },
@@ -120,15 +123,25 @@
     const kinds = [settings.types.fill && 'fill', settings.types.mc && 'mc'].filter(Boolean);
     const forms = [settings.forms.en && 'en', settings.forms.fr && 'fr'].filter(Boolean);
     const v = V.BY_ID[c.id];
-    const q = { verb: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms) };
-    q.ans = V.answer(v, c.tense, c.pronoun);
-    if (!q.ans) return null; // form doesn't exist (e.g. "je faut")
+    const af = settings.answerForms;
+    // sentence patterns this verb allows, limited to the pronoun types switched on
+    let pats = S.parse(v.pats).filter(p => p.cats.every(k => settings.objPron[k]));
+    if (!af.verb) pats = pats.filter(p => p.type !== 'S');
+    if (!pats.length) return null;
+    const pat = pick(pats);
+    const mode = af.verb && af.pron ? pick(pat.type === 'S' ? ['verb', 'both'] : ['verb', 'pron', 'both']) : af.verb ? 'verb' : 'pron';
+    const b = S.build(v, c.tense, c.pronoun, pat, mode);
+    if (!b) return null; // form doesn't exist (e.g. "je faut")
+    const q = { verb: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms), mode,
+      ans: b.ans, before: b.before, after: b.after, english: b.english, cue: b.cue };
     if (q.kind === 'mc') {
-      const raw = [q.ans.blank].concat(V.distractors(v, c.tense, c.pronoun));
-      const opts = raw.map(x => (q.form === 'fr' ? x : V.assemble(c.pronoun, v, x).full));
-      const order = V.shuffle([0, 1, 2, 3].slice(0, opts.length));
-      q.options = order.map(i => opts[i]);
-      q.correctIndex = order.indexOf(0);
+      const opts = [b.ans.blank].concat(S.options(b, v, c.tense, c.pronoun));
+      if (opts.length < 3) q.kind = 'fill';
+      else {
+        const order = V.shuffle(opts.map((_, i) => i));
+        q.options = order.map(i => opts[i]);
+        q.correctIndex = order.indexOf(0);
+      }
     }
     return q;
   }
@@ -136,6 +149,8 @@
   function settingsProblem() {
     if (!settings.types.fill && !settings.types.mc) return 'Choose at least one question type in Settings.';
     if (!settings.forms.en && !settings.forms.fr) return 'Choose English or French under Question Form in Settings.';
+    if (!settings.answerForms.verb && !settings.answerForms.pron) return 'Choose Verbs or Pronouns under Answer Form in Settings.';
+    if (!settings.answerForms.verb && !Object.values(settings.objPron).some(Boolean)) return 'Answer Form is set to Pronouns only, so switch on at least one type under Other Pronouns in Settings.';
     if (!selPronouns().length) return 'Choose at least one pronoun in Settings.';
     if (!selTenses().length) return 'Choose at least one tense in Settings.';
     return null;
@@ -301,15 +316,21 @@
     // Question
     const tl = V.TENSE_LABEL[q.tense];
     const blankHtml = `<span class="blank"><span class="blank-fill"></span></span>`;
-    const sentence = q.form === 'fr'
-      ? `${esc(cap(q.ans.prefix))}${q.ans.prefix.endsWith("'") ? '' : ' '}${blankHtml}`
-      : esc(V.english(q.verb, q.tense, q.pronoun));
+    const scaffold = (q.before ? esc(cap(q.before)) + (q.before.endsWith("'") ? '' : ' ') : '') + blankHtml + (q.after ? ' ' + esc(q.after) : '');
+    const sentence = q.form === 'fr' ? scaffold : esc(q.english);
+    // subtitle: English subject (when you type it) • infinitive • English for the other pronouns (when you type them)
+    const askPron = q.form === 'fr' && q.mode !== 'verb';
+    const hintParts = [];
+    if (askPron) hintParts.push(`<span class="cue">${esc(V.englishSubject(q.pronoun, q.verb))}</span>`);
+    hintParts.push(`<span lang="fr">${esc(q.verb.id)}</span>`);
+    if (askPron && q.cue) hintParts.push(`<span class="cue">${esc(q.cue)}</span>`);
     qa.innerHTML = `
       <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : 'Fill in the blank'}</div>
       <p class="q-tense" lang="fr" style="color:${TENSE_COLOR[q.tense]}">${esc(tl)}</p>
       <div class="q-rule"></div>
       <p class="q-text" lang="${q.form === 'fr' ? 'fr' : 'en'}">${sentence}</p>
-      <p class="q-hint"><span lang="fr">${esc(q.verb.id)}</span>${q.form === 'en' ? `<span class="dot">·</span><span class="how">${q.kind === 'mc' ? ICON.tap : ICON.write}Answer in French</span>` : ''}</p>`;
+      ${q.form === 'en' && q.mode !== 'both' ? `<p class="q-scaffold" lang="fr">${scaffold}</p>` : ''}
+      <p class="q-hint">${hintParts.join('<span class="sep" aria-hidden="true">•</span>')}${q.form === 'en' ? `<span class="how">${q.kind === 'mc' ? ICON.tap : ICON.write}Answer in French</span>` : ''}</p>`;
     const fillBlank = (txt, ok) => {
       const b = $('.blank-fill', qa); if (!b) return;
       b.textContent = txt; b.parentElement.classList.add('filled', ok ? 'good' : 'bad');
@@ -325,7 +346,7 @@
           <label class="field">
             <span class="sr">Your answer</span>
             <input id="answer" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" lang="fr" enterkeyhint="done"
-              placeholder="${q.form === 'fr' ? 'Type the missing verb' : 'Type the sentence in French'}">
+              placeholder="${q.mode === 'verb' ? 'Type the missing verb' : q.mode === 'pron' ? 'Type the subject and pronouns' : 'Type the sentence in French'}">
           </label>
           <div class="accents" aria-label="Accented letters">${['é', 'è', 'ê', 'à', 'â', 'ç', 'î', 'ï', 'ô', 'û', 'ù', 'ë'].map(c => `<button type="button" class="key" data-k="${c}">${c}</button>`).join('')}</div>
           <div class="msg" aria-live="polite"><span class="msg-main"></span><span class="msg-sub"></span></div>
@@ -353,13 +374,13 @@
       const done = () => { input.readOnly = true; input.blur(); aa.querySelector('.accents').classList.add('off'); btn.textContent = nextLabel; btn.classList.add('next'); };
       function submit() {
         if (quiz.state === 'answered') return advance();
-        const r = V.check(input.value, q.ans, q.form);
+        const r = V.check(input.value, q.ans, 'fr');
         if (r === 'empty') { input.focus(); return; }
         quiz.tries++;
         if (r === 'correct') {
           setMsg('Correct!', 'good'); fillBlank(q.ans.blank, true); input.classList.add('good'); finishQ(true); done();
         } else if (quiz.tries >= 3) {
-          input.value = quiz.draft = q.form === 'fr' ? q.ans.blank : q.ans.full;
+          input.value = quiz.draft = q.ans.blank;
           input.classList.add('revealed');
           setMsg(r === 'accent' ? 'Check your accents.' : 'Not quite.', 'bad', 'The correct answer is shown above.');
           fillBlank(q.ans.blank, false); finishQ(false); done();
@@ -506,11 +527,18 @@
               ${check('fr', 'French', s.forms.fr, 'Questions are French sentences with a blank')}
             </div>
             <p class="warn-note" data-warn="forms">Select at least one question form.</p>
+            <h3>Answer Form</h3>
+            <div class="checks" data-set="answerForms">
+              ${check('verb', 'Verbs', s.answerForms.verb, 'Fill in the conjugated verb')}
+              ${check('pron', 'Pronouns', s.answerForms.pron, 'Fill in the subject and the other pronouns')}
+            </div>
+            <p class="group-note muted">With both selected, you may be asked for the verb, the pronouns, or the whole sentence.</p>
+            <p class="warn-note" data-warn="answerForms">Select at least one answer form.</p>
           </section>
 
           <section class="group">
             <h2>Question Content</h2>
-            <h3>Pronouns</h3>
+            <h3>Subject Pronouns</h3>
             <div class="checks two" data-set="pronouns">
               <div>${left.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
               <div>${right.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
@@ -521,6 +549,15 @@
               ${V.TENSES.map(t => check(t.id, `<span lang="fr">${t.label}</span>`, s.tenses[t.id])).join('')}
             </div>
             <p class="warn-note" data-warn="tenses">Select at least one tense.</p>
+            <h3>Other Pronouns</h3>
+            <div class="checks" data-set="objPron">
+              ${check('do', 'Direct object', s.objPron.do, '<span lang="fr">me, te, le, la, nous, vous, les</span>')}
+              ${check('io', 'Indirect object', s.objPron.io, '<span lang="fr">me, te, lui, nous, vous, leur</span>')}
+              ${check('refl', 'Reflexive', s.objPron.refl, '<span lang="fr">me, te, se, nous, vous</span>')}
+              ${check('y', '<span lang="fr">y</span>', s.objPron.y, 'there, about it, in it…')}
+              ${check('en', '<span lang="fr">en</span>', s.objPron.en, 'some, about it, from there…')}
+            </div>
+            <p class="group-note muted">With all of these off, questions use only the subject and the verb.</p>
             <h3>Study Content</h3>
             <div class="checks sources" data-set="sources">
               ${Object.entries(SOURCES).map(([id, o]) => `
@@ -562,7 +599,7 @@
     });
     const warn = () => {
       const none = o => !Object.values(o).some(Boolean);
-      ['types', 'forms', 'pronouns', 'tenses', 'sources'].forEach(k => $(`[data-warn="${k}"]`, node).classList.toggle('show', none(s[k])));
+      ['types', 'forms', 'answerForms', 'pronouns', 'tenses', 'sources'].forEach(k => $(`[data-warn="${k}"]`, node).classList.toggle('show', none(s[k])));
     };
     $$('[data-set]', node).forEach(set => {
       const key = set.dataset.set;
