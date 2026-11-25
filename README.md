@@ -2,6 +2,12 @@
 
 An installable iPhone web app (PWA) for practising French verb conjugations. All progress is stored on the device.
 
+Two modules, each with its own settings, lists and progress:
+- **Verbs** – every form of one tense at once (fill in the blank, or drag and drop)
+- **Verbs & Pronouns** – sentences with object, reflexive, *y* and *en* pronouns, and modal verbs
+
+Backups (Settings → Save Backup) are one .zip with a JSON file per module; Restore takes the .zip or a single module's file.
+
 ## Files
 - `index.html` – page and styles
 - `app.js` – screens, quiz logic, settings, verb pages and progress

@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '15';
+  const APP_VERSION = '16';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -46,11 +46,33 @@
     }
     return s;
   }
-  let settings = migrateSettings(load(KEY_S, null));
-  let data = Object.assign(EMPTY_DATA(), load(KEY_D, {}));
-  const saveSettings = () => save(KEY_S, settings);
-  const saveData = () => save(KEY_D, data);
+  /* Two modules, each with its own settings and data:
+     vp = Verbs & Pronouns (sentences), vb = Verbs (every form of a tense at once) */
+  const KEYS = { vp: { s: KEY_S, d: KEY_D }, vb: { s: 'apprenez.vb.settings.v1', d: 'apprenez.vb.data.v1' } };
+  const MOD_NAME = { vp: 'Verbs & Pronouns', vb: 'Verbs' };
+  const DEFAULT_VB = () => ({
+    num: 10,
+    types: { fill: true, dnd: true },
+    tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
+    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false },
+  });
+  const settingsFor = (m, raw) => (m === 'vb' ? merge(DEFAULT_VB(), raw) : migrateSettings(raw));
+  const dataFor = raw => Object.assign(EMPTY_DATA(), raw || {});
+  let mod = 'vp';
+  let settings = settingsFor('vp', load(KEY_S, null));
+  let data = dataFor(load(KEY_D, {}));
+  const saveSettings = () => save(KEYS[mod].s, settings);
+  const saveData = () => save(KEYS[mod].d, data);
   saveSettings();
+  function setModule(m) {
+    if (m === mod) return;
+    mod = m;
+    settings = settingsFor(m, load(KEYS[m].s, null));
+    data = dataFor(load(KEYS[m].d, {}));
+    if (m === 'vp') data.excluded = [];
+    saveSettings();
+    quiz = null; listKey = 'common'; range = '30';
+  }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignore */ }
 
   /* ---------------- Learning data ---------------- */
@@ -203,6 +225,11 @@
   }
 
   function settingsProblem() {
+    if (mod === 'vb') {
+      if (!settings.types.fill && !settings.types.dnd) return 'Choose at least one question type in Settings.';
+      if (!selTenses().length) return 'Choose at least one tense in Settings.';
+      return null;
+    }
     if (!settings.types.fill && !settings.types.mc) return 'Choose at least one question type in Settings.';
     if (!settings.forms.en && !settings.forms.fr) return 'Choose English or French under Question Form in Settings.';
     if (!settings.answerForms.verb && !settings.answerForms.pron) return 'Choose Verbs or Pronouns under Answer Form in Settings.';
@@ -234,7 +261,7 @@
 
   function newQuiz() {
     const problem = settingsProblem();
-    const qs = problem ? [] : buildQuestions(settings.num);
+    const qs = problem ? [] : mod === 'vb' ? buildVQuestions(settings.num) : buildQuestions(settings.num);
     quiz = { qs, i: 0, tries: 0, state: 'ask', draft: '', picked: null, lastOk: null, results: [], done: false, sig: sigOf(), problem: problem || (qs.length ? null : NO_MATCH) };
   }
 
@@ -244,11 +271,11 @@
     quiz.sig = sigOf();
     const keep = quiz.state === 'answered' ? quiz.i + 1 : quiz.i;
     const problem = settingsProblem();
-    const fresh = problem ? [] : buildQuestions(Math.max(0, settings.num - keep));
+    const fresh = problem ? [] : (mod === 'vb' ? buildVQuestions : buildQuestions)(Math.max(0, settings.num - keep));
     quiz.qs = quiz.qs.slice(0, keep).concat(fresh);
     if (!quiz.qs.length) { quiz.problem = problem || NO_MATCH; return; }
     quiz.problem = null;
-    if (quiz.state === 'ask') { quiz.tries = 0; quiz.draft = ''; }
+    if (quiz.state === 'ask') { quiz.tries = 0; quiz.draft = ''; quiz.w = null; }
     if (quiz.i >= quiz.qs.length) quiz.done = true;
   }
 
@@ -271,6 +298,8 @@
     cross: svg('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>', 'stroke-width="2.4"'),
     write: svg('<path d="M13 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V11"/><path d="M8 13h3M8 17h7"/><path d="M18.6 2.6l2.3 2.3-7.1 7.1-3 .7.7-3z"/>'),
     tap: svg('<path d="M9.5 14V6.5a1.5 1.5 0 0 1 3 0V12"/><path d="M12.5 11a1.5 1.5 0 0 1 3 0v1.5"/><path d="M15.5 12a1.5 1.5 0 0 1 3 0v3.5a5.5 5.5 0 0 1-5.5 5.5h-1a5.2 5.2 0 0 1-4.3-2.3l-2.3-3.4a1.5 1.5 0 0 1 2.4-1.8l1.2 1.5"/><path d="M6.3 4.3 5 3M15.7 4.3 17 3M11 2.2V1"/>'),
+    grid: svg('<rect x="3.5" y="4" width="7" height="4" rx="1"/><rect x="13.5" y="4" width="7" height="4" rx="1"/><rect x="3.5" y="10" width="7" height="4" rx="1"/><rect x="13.5" y="10" width="7" height="4" rx="1"/><rect x="3.5" y="16" width="7" height="4" rx="1"/><rect x="13.5" y="16" width="7" height="4" rx="1"/>'),
+    ret: svg('<path d="M20 5v6a3 3 0 0 1-3 3H6"/><path d="M10 10l-4 4 4 4"/>', 'stroke-width="2"'),
     book: svg('<path d="M12 6.5C10 5 7.5 4.5 4 4.8v13.4c3.5-.3 6 .2 8 1.8 2-1.6 4.5-2.1 8-1.8V4.8c-3.5-.3-6 .2-8 1.7z"/><path d="M12 6.5V20"/>'),
     verbs: svg('<path d="M4 5.5h10M4 10h7M4 14.5h10M4 19h6"/><path d="M16.5 13.5l2 2 3.5-4"/>'),
   };
@@ -314,7 +343,14 @@
         </header>
         <ul class="modules">
           <li>
-            <button class="module" data-go="quiz">
+            <button class="module" data-go="quiz" data-mod="vb">
+              <span class="m-icon">${ICON.grid}</span>
+              <span class="m-text"><span class="m-title">Verbs</span><span class="m-sub">every form of a tense at once</span></span>
+              <span class="m-chev">${ICON.chev}</span>
+            </button>
+          </li>
+          <li>
+            <button class="module" data-go="quiz" data-mod="vp">
               <span class="m-icon">${ICON.verbs}</span>
               <span class="m-text"><span class="m-title">Verbs &amp; Pronouns</span><span class="m-sub">${n} verbs · ${V.TENSES.length} tenses</span></span>
               <span class="m-chev">${ICON.chev}</span>
@@ -322,7 +358,7 @@
           </li>
         </ul>
       </main>`);
-    $('[data-go="quiz"]', node).onclick = () => go('quiz');
+    $$('[data-mod]', node).forEach(b => b.onclick = () => { setModule(b.dataset.mod); go('quiz'); });
     return node;
   }
 
@@ -334,7 +370,7 @@
       <div class="screen quiz">
         <header class="bar">
           <button class="icon" data-act="home" aria-label="Back to home">${ICON.back}</button>
-          <div class="bar-title">Verbs &amp; Pronouns</div>
+          <div class="bar-title">${esc(MOD_NAME[mod])}</div>
           <div class="bar-right">
             <button class="icon star" data-act="star" aria-label="Add verb to Custom list" ${showQ ? '' : 'disabled'}>${ICON.star}</button>
             <button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button>
@@ -363,6 +399,7 @@
       return node;
     }
     if (quiz.done) { renderSummary(qa, aa); return node; }
+    if (mod === 'vb') { renderVQuestion(node, qa, aa, q, starBtn); return node; }
 
     const setStar = () => {
       const on = isCustom((q.study || q.verb).id);
@@ -514,7 +551,7 @@
   }
 
   function advance() {
-    if (quiz.i < quiz.qs.length - 1) { quiz.i++; quiz.tries = 0; quiz.state = 'ask'; quiz.draft = ''; quiz.picked = null; }
+    if (quiz.i < quiz.qs.length - 1) { quiz.i++; quiz.tries = 0; quiz.state = 'ask'; quiz.draft = ''; quiz.picked = null; quiz.w = null; }
     else quiz.done = true;
     render();
     if (!quiz.done) { const inp = $('#answer'); if (inp && !matchMedia('(hover: none)').matches) inp.focus(); }
@@ -535,11 +572,368 @@
         </div>
         <ul class="results">
           ${quiz.results.map(r => `<li class="${r.ok ? 'good' : 'bad'}"><span class="mark">${r.ok ? ICON.check : ICON.cross}</span>
-            <span class="r-text"><span lang="fr">${esc(r.q.ans.full)}</span><small>${esc(r.q.verb.id)}${r.q.inner ? ' + ' + esc(r.q.inner.id) : ''} · ${esc(V.TENSE_LABEL[r.q.tense])}</small></span></li>`).join('')}
+            <span class="r-text"><span lang="fr">${esc(r.q.ans.full)}</span><small>${r.q.slots ? `${esc(V.TENSE_LABEL[r.q.tense])} · ${r.n} of ${r.q.slots.length} forms` : `${esc(r.q.verb.id)}${r.q.inner ? ' + ' + esc(r.q.inner.id) : ''} · ${esc(V.TENSE_LABEL[r.q.tense])}`}</small></span></li>`).join('')}
         </ul>
       </div>`;
     $('[data-act="home"]', aa).onclick = () => go('home');
     $('[data-act="again"]', aa).onclick = () => { newQuiz(); render(); };
+  }
+
+  /* ================= Verbs module: every form of one tense at once ================= */
+  const SUBJ_RE = /^(je |j'|tu |il |elle |on |nous |vous |ils |elles )/;
+  const IMP_SELF = { tu: 'toi', nous: 'nous', vous: 'vous' };
+  const SLOT_PS = [['je'], ['tu'], ['il', 'elle', 'on'], ['nous'], ['vous'], ['ils', 'elles']];
+  const VOWEL_START = /^[aeiouyhàâäéèêëîïôöùûü]/i;
+  // The forms to fill in for a verb and tense: [{ i, label, canon, acceptBlank, acceptFull }] (6, or 3 for the impératif)
+  const tenseSetCache = {};
+  function tenseSet(v, tense) {
+    const ck = v.id + '|' + tense;
+    if (ck in tenseSetCache) return tenseSetCache[ck];
+    let out = [];
+    V.forms(v);
+    if (v.impersonal) out = null;
+    else if (tense === 'imperatif') {
+      for (const p of ['tu', 'nous', 'vous']) {
+        const part = V.verbPart(v, 'imperatif', p);
+        if (!part) { out = null; break; }
+        const alts = part.alts.map(f => f + (v.refl ? '-' + IMP_SELF[p] : ''));
+        out.push({ i: V.SLOT[p], label: '(' + p + ')', canon: alts[0], acceptBlank: alts, acceptFull: alts });
+      }
+    } else {
+      for (let i = 0; i < 6 && out; i++) {
+        const blanks = [], fulls = [];
+        for (const p of SLOT_PS[i]) {
+          const a = V.answer(v, tense, p);
+          if (!a) { if (p === SLOT_PS[i][0]) out = null; continue; }
+          a.acceptFull.forEach(f => { fulls.push(f); blanks.push(f.replace(SUBJ_RE, '')); });
+        }
+        if (!out) break;
+        // reflexive verbs: the reflexive pronoun is shown in grey in front of the blank ("se | lève"), so only the verb is asked
+        const refl = v.refl ? ['me', 'te', 'se', 'nous', 'vous', 'se'][i] : '';
+        const bare = refl ? blanks.map(b => b.replace(/^(me |m'|te |t'|se |s'|nous |vous )/, '')) : blanks;
+        out.push({ i, label: V.SLOT_LABEL[i], refl, canon: bare[0], acceptBlank: [...new Set(bare.concat(blanks))], acceptFull: [...new Set(fulls)] });
+      }
+    }
+    tenseSetCache[ck] = out;
+    return out;
+  }
+  // je or j' in front of what's been typed or placed
+  const jeLabel = (v, text) => (text && VOWEL_START.test(text) && !V.isHAspire(v) ? "j'" : 'je');
+  const slotLabel = (q, sl, text) => (sl.i === 0 && q.tense !== 'imperatif' && !sl.refl ? jeLabel(q.verb, text) : sl.label);
+  // "se" or "s'" in front of what's been typed or placed
+  const reflPrefix = (q, sl, text) => (!sl.refl ? '' : /^[mts]e$/.test(sl.refl) && text && VOWEL_START.test(text) && !V.isHAspire(q.verb) ? sl.refl[0] + "'" : sl.refl);
+
+  // Wrong answers for drag and drop: common misspellings of the forms, 3 or 4 so that everything fits on screen
+  function extrasFor(v, tense, set) {
+    const right = new Set(set.flatMap(sl => sl.acceptBlank.map(V.norm)));
+    const cands = [];
+    set.forEach(sl => {
+      const p = V.SLOT_PRONOUN[sl.i];
+      V.distractors(v, tense, p).forEach(d => {
+        let x = d;
+        if (tense === 'imperatif' && v.refl) x = d + '-' + IMP_SELF[p];
+        cands.push(x);
+      });
+    });
+    const seen = new Set(), uniq = [];
+    V.shuffle(cands).forEach(x => { const n = V.norm(x); if (x && !right.has(n) && !seen.has(n)) { seen.add(n); uniq.push(x); } });
+    // estimate the rows of tiles (about 10px a letter plus padding, 330px wide) and keep it to three rows
+    const rows = list => { let r = 1, w = 0; list.forEach(t => { const cw = t.length * 11.5 + 30; if (w && w + 10 + cw > 320) { r++; w = cw; } else w += (w ? 10 : 0) + cw; }); return r; };
+    const forms = set.map(sl => sl.canon);
+    let n = Math.min(4, uniq.length);
+    while (n > 3 && rows(forms.concat(uniq.slice(0, n))) > 3) n--;
+    return uniq.slice(0, n);
+  }
+
+  function makeVQuestion(c) {
+    const v = V.BY_ID[c.id];
+    if (!v) return null;
+    const set = tenseSet(v, c.tense);
+    if (!set) return null;
+    const kinds = [settings.types.fill && 'fill', settings.types.dnd && 'dnd'].filter(Boolean);
+    const q = { verb: v, study: v, tense: c.tense, kind: pick(kinds), slots: set, ans: { full: v.id } };
+    if (q.kind === 'dnd') {
+      const extras = extrasFor(v, c.tense, set);
+      q.chips = V.shuffle(set.map(sl => sl.canon).concat(extras)).map(t => ({ t }));
+    }
+    return q;
+  }
+  function buildVPool() {
+    const T = selTenses(), src = settings.sources;
+    const ids = new Set();
+    ['common', 'g1', 'g2', 'g3'].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
+    const verbs = [...ids];
+    const pairs = [];
+    const add = (id, tense) => { if (V.BY_ID[id]) pairs.push({ id, tense }); };
+    // your own lists come back with their tense, whatever the tense settings
+    if (src.custom) data.custom.forEach(k => { const [id, t] = k.split('|'); add(id, t); });
+    if (src.incorrect) missedKeys().forEach(k => { const m = data.missed[k]; add(m.v, m.t); });
+    const formPairs = keys => [...new Set(keys.map(k => { const p = V.parseKey(k); return p.id + '|' + p.tense; }))]
+      .forEach(x => { const [id, t] = x.split('|'); if (T.includes(t)) add(id, t); });
+    if (src.review) formPairs(reviewKeys());
+    if (src.learned) formPairs(learnedKeys());
+    const A = verbs.length * T.length;
+    return { size: A + pairs.length, draw() { const r = Math.floor(Math.random() * (A + pairs.length)); return r >= A ? pairs[r - A] : { id: pick(verbs), tense: pick(T) }; } };
+  }
+  function buildVQuestions(n) {
+    const pool = buildVPool();
+    if (!pool.size) return [];
+    const out = [], used = new Set();
+    for (let tries = 0; out.length < n && tries < n * 60; tries++) {
+      const c = pool.draw(), k = c.id + '|' + c.tense;
+      if (used.has(k) && used.size < Math.min(pool.size, n)) continue;
+      const q = makeVQuestion(c);
+      if (!q) continue;
+      used.add(k); out.push(q);
+    }
+    return out;
+  }
+  // one result per form (In Review, Learned), one event per question (Progress), the whole tense in Incorrect Answers
+  function recordForm(k, ok, kind, answer, now) {
+    const f = data.forms[k] || (data.forms[k] = { streak: 0, correct: 0, wrong: 0, seen: 0, first: now, learnedAt: null });
+    f.seen++; f.last = now; f.type = kind; f.answer = answer;
+    if (ok) { f.correct++; f.streak++; if (f.streak >= 5 && !f.learnedAt) f.learnedAt = now; }
+    else { f.wrong++; f.streak = 0; f.learnedAt = null; }
+  }
+  function recordV(q, oks) {
+    const now = Date.now(), keys = [];
+    q.slots.forEach((sl, j) => { const k = V.formKey(q.verb.id, q.tense, sl.i); keys.push(k); recordForm(k, oks[j], q.kind, sl.canon, now); });
+    const all = oks.every(Boolean);
+    data.events.push({ t: now, k: keys[0], fk: keys, ok: all ? 1 : 0, ty: q.kind });
+    const mk = q.verb.id + '|' + q.tense;
+    if (all) delete data.missed[mk];
+    else data.missed[mk] = { v: q.verb.id, t: q.tense, full: q.verb.id, en: V.englishGloss(q.verb), at: now };
+    saveData();
+  }
+  const vKey = q => q.verb.id + '|' + q.tense;
+
+  function renderVQuestion(node, qa, aa, q, starBtn) {
+    node.classList.add('vq');
+    const tl = V.TENSE_LABEL[q.tense];
+    // star: this verb in this tense goes into this module's Custom list
+    const setStar = () => {
+      const on = data.custom.includes(vKey(q));
+      starBtn.classList.toggle('on', on); starBtn.setAttribute('aria-pressed', on);
+      starBtn.setAttribute('aria-label', on ? 'Remove this verb and tense from Custom' : 'Add this verb and tense to Custom');
+    };
+    setStar();
+    starBtn.onclick = () => {
+      const k = vKey(q), i = data.custom.indexOf(k);
+      if (i >= 0) data.custom.splice(i, 1); else data.custom.push(k);
+      saveData(); setStar();
+      toast(`${q.verb.id} (${tl}) ${i >= 0 ? 'removed from' : 'added to'} Custom`);
+    };
+    const S6 = q.slots;
+    const w = quiz.w || (quiz.w = { vals: S6.map(() => ''), status: S6.map(() => ''), active: 0, place: S6.map(() => null), msg: null });
+    const answered = quiz.state === 'answered';
+    // grid, singular on the left, plural on the right
+    const byI = Object.fromEntries(S6.map((sl, j) => [sl.i, j]));
+    const cellsOrder = q.tense === 'imperatif' ? [1, 3, null, 4] : [0, 3, 1, 4, 2, 5];
+    const order = S6.map((_, j) => j); // typing order: je, tu, il, nous, vous, ils
+    const cellText = j => (q.kind === 'dnd' ? (w.place[j] !== null ? q.chips[w.place[j]].t : '') : w.vals[j]);
+    qa.innerHTML = `
+      <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'dnd' ? 'Drag and drop' : 'Fill in the blank'}</div>
+      <p class="q-tense" lang="fr" style="color:${TENSE_COLOR[q.tense]}">${esc(tl)}</p>
+      <div class="q-rule"></div>
+      <p class="vq-inf" lang="fr"><span class="q-inf" data-id="${esc(q.verb.id)}">${esc(q.verb.id)}</span></p>
+      <p class="vq-gloss">${esc(V.englishGloss(q.verb))}</p>
+      <div class="vgrid2">${cellsOrder.map(i => {
+        if (i === null || !(i in byI)) return '<div class="vrow empty"></div>';
+        const j = byI[i];
+        return `<div class="vrow" data-j="${j}"><span class="pr" lang="fr">${esc(slotLabel(q, S6[j], cellText(j)))}</span>${S6[j].refl ? '<span class="rf" lang="fr"></span>' : ''}<span class="vbl" lang="fr"></span></div>`;
+      }).join('')}</div>`;
+    const cell = j => $(`.vrow[data-j="${j}"]`, qa);
+    const paint = () => S6.forEach((sl, j) => {
+      const c = cell(j), b = $('.vbl', c), t = cellText(j);
+      $('.pr', c).textContent = slotLabel(q, sl, t);
+      if (sl.refl) $('.rf', c).textContent = reflPrefix(q, sl, t || (w.fixed && w.fixed[j]) || '');
+      b.className = 'vbl' + (w.status[j] ? ' ' + w.status[j] : '') + (q.kind === 'fill' && !answered && quiz.state === 'ask' && j === w.active && w.status[j] !== 'good' ? ' active' : '');
+      if (q.kind === 'dnd' && w.place[j] !== null && !w.status[j]) { b.classList.add('chipped'); b.innerHTML = `<span class="chip placed" data-c="${w.place[j]}">${esc(t)}</span>`; }
+      else b.textContent = t;
+    }) || fitCells();
+    // long forms ("aurions prononcé") shrink to fit their blank instead of being cut off
+    const fitCells = () => $$('.vbl', qa).forEach(b => {
+      const tgt = b.querySelector('.chip') || b;
+      tgt.style.fontSize = ''; tgt.style.whiteSpace = ''; tgt.style.lineHeight = '';
+      let size = parseFloat(getComputedStyle(tgt).fontSize);
+      while (b.scrollWidth > b.clientWidth + 1 && size > 14) { size -= 1; tgt.style.fontSize = size + 'px'; }
+      if (b.scrollWidth > b.clientWidth + 1) { // still too long ("nous nous sommes habillés"): two lines
+        tgt.style.whiteSpace = 'normal'; tgt.style.lineHeight = '1.05'; size = 16; tgt.style.fontSize = size + 'px';
+        while ((b.scrollWidth > b.clientWidth + 1 || tgt.offsetHeight > 40) && size > 11) { size -= 1; tgt.style.fontSize = size + 'px'; }
+      }
+    });
+    // once answered, the infinitive links to the verb's page; Back comes back here
+    const linkVerb = () => $$('span.q-inf', qa).forEach(s => {
+      const a = el(`<a href="#" class="q-inf def-link" lang="fr">${esc(s.dataset.id)}</a>`);
+      a.onclick = e => { e.preventDefault(); verbId = s.dataset.id; verbFrom = 'quiz'; go('verb'); };
+      s.replaceWith(a);
+    });
+    const isLast = quiz.i >= quiz.qs.length - 1;
+    const nextLabel = isLast ? 'Finish' : 'Next';
+    const setMsg = (main, cls, sub = '') => { w.msg = { main, cls, sub }; showMsg(); };
+    const showMsg = () => { const m = $('.msg', aa); if (!m) return; const x = w.msg; m.className = 'msg' + (x ? ' show ' + (x.cls || '') : ''); $('.msg-main', m).textContent = x ? x.main : ''; $('.msg-sub', m).textContent = x ? x.sub : ''; };
+    const finish = oks => {
+      quiz.state = 'answered'; const ok = oks.every(Boolean); quiz.lastOk = ok;
+      quiz.results.push({ q, ok, n: oks.filter(Boolean).length }); recordV(q, oks);
+      $('.pbar div', node).style.width = (quiz.results.length / quiz.qs.length) * 100 + '%';
+      setMsg(ok ? 'Correct!' : 'Not quite.', ok ? 'good' : 'bad', ok ? '' : MISSED_NOTE);
+    };
+    // after three tries: the right forms in green, the wrong ones corrected in red
+    const reveal = good => S6.forEach((sl, j) => {
+      if (good[j]) w.status[j] = 'good';
+      else { w.status[j] = 'fixed'; if (q.kind === 'fill') w.vals[j] = sl.canon; else w.place[j] = null; w.fixed = w.fixed || {}; w.fixed[j] = sl.canon; }
+    });
+    const check = j => V.check(cellText(j), S6[j], 'fr');
+
+    if (q.kind === 'fill') {
+      aa.innerHTML = `
+        <div class="a-inner vq-fill">
+          <p class="edit-tag">Editing <b lang="fr"></b></p>
+          <div class="field ans-wrap">
+            <input id="answer" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" lang="fr" enterkeyhint="next" placeholder="Type the form">
+            <button class="ret" type="button" aria-label="Put it in and go to the next form">${ICON.ret}</button>
+          </div>
+          <div class="accents" aria-label="Accented letters">${['é', 'è', 'ê', 'à', 'â', 'ç', 'î', 'ï', 'ô', 'û', 'ù', 'ë'].map(c => `<button type="button" class="key" data-k="${c}">${c}</button>`).join('')}</div>
+          <div class="msg" aria-live="polite"><span class="msg-main"></span><span class="msg-sub"></span></div>
+          <button class="btn primary" data-act="submit">${answered ? nextLabel : 'Submit'}</button>
+        </div>`;
+      const input = $('#answer', aa), btn = $('[data-act="submit"]', aa), tag = $('.edit-tag b', aa);
+      const editable = j => w.status[j] !== 'good' && quiz.state === 'ask';
+      const setActive = j => { w.active = j; input.value = w.vals[j]; tag.textContent = slotLabel(q, S6[j], w.vals[j]); paint(); };
+      const fixedView = () => { // red corrected forms keep the text the app filled in
+        if (w.fixed) S6.forEach((sl, j) => { if (w.fixed[j]) { const b = $('.vbl', cell(j)); b.textContent = w.fixed[j]; } });
+        fitCells();
+      };
+      const nextEmpty = () => {
+        const after = order.slice(order.indexOf(w.active) + 1).concat(order.slice(0, order.indexOf(w.active) + 1));
+        return after.find(j => editable(j) && !w.vals[j].trim()) ?? after.find(j => editable(j) && j !== w.active);
+      };
+      const done = () => { input.readOnly = true; input.value = ''; input.placeholder = ''; input.blur(); $('.accents', aa).classList.add('off'); btn.textContent = nextLabel; $('.edit-tag', aa).style.visibility = 'hidden'; linkVerb(); };
+      const insert = ch => {
+        if (input.readOnly) return;
+        const a = input.selectionStart ?? input.value.length, b = input.selectionEnd ?? a;
+        input.value = input.value.slice(0, a) + ch + input.value.slice(b);
+        input.dispatchEvent(new Event('input')); input.focus();
+        try { input.setSelectionRange(a + 1, a + 1); } catch (e) { /* ignore */ }
+      };
+      $$('.key', aa).forEach(k => {
+        k.addEventListener('mousedown', e => e.preventDefault());
+        k.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+        k.addEventListener('touchend', e => { e.preventDefault(); insert(k.dataset.k); });
+        k.addEventListener('click', () => insert(k.dataset.k));
+      });
+      input.addEventListener('input', () => {
+        if (!editable(w.active)) return;
+        w.vals[w.active] = input.value; if (w.status[w.active] === 'bad') w.status[w.active] = '';
+        tag.textContent = slotLabel(q, S6[w.active], input.value); paint();
+      });
+      const goNext = () => { const j = nextEmpty(); if (j !== undefined) setActive(j); input.focus(); };
+      $('.ret', aa).addEventListener('mousedown', e => e.preventDefault());
+      $('.ret', aa).onclick = () => { if (!answered && quiz.state === 'ask') goNext(); };
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (quiz.state === 'ask') goNext(); } });
+      S6.forEach((_, j) => cell(j).addEventListener('click', () => { if (editable(j)) { setActive(j); input.focus(); } }));
+      btn.addEventListener('mousedown', e => { if (quiz.state === 'ask') e.preventDefault(); });
+      btn.onclick = () => {
+        if (quiz.state === 'answered') return advance();
+        if (S6.every((_, j) => !w.vals[j].trim())) { input.focus(); return; }
+        quiz.tries++;
+        const res = S6.map((_, j) => (w.status[j] === 'good' ? 'correct' : check(j)));
+        res.forEach((r, j) => { w.status[j] = r === 'correct' ? 'good' : 'bad'; });
+        const good = res.map(r => r === 'correct');
+        if (good.every(Boolean)) { finish(good); paint(); done(); return; }
+        if (quiz.tries >= 3) { reveal(good); finish(good); paint(); fixedView(); done(); return; }
+        const bad = res.filter(r => r !== 'correct'), left = 3 - quiz.tries;
+        setMsg(bad.every(r => r === 'accent') ? 'Don’t forget to check your accents.' : `${bad.length} ${bad.length === 1 ? 'form needs' : 'forms need'} another look.`, 'warn', `${left} ${left === 1 ? 'try' : 'tries'} left`);
+        setActive(order.find(j => w.status[j] === 'bad'));
+        input.focus();
+      };
+      if (answered) { paint(); fixedView(); done(); }
+      else { if (w.status[w.active] === 'good') w.active = order.find(j => editable(j)) ?? 0; setActive(w.active); }
+      showMsg();
+      return;
+    }
+
+    // ---- drag and drop ----
+    aa.innerHTML = `
+      <div class="a-inner vq-dnd">
+        <p class="dnd-hint">Drag a form to its blank, or tap it to fill the next one.</p>
+        <div class="bank">${q.chips.map((c, k) => `<span class="chip" data-c="${k}" lang="fr">${esc(c.t)}</span>`).join('')}</div>
+        <div class="msg" aria-live="polite"><span class="msg-main"></span><span class="msg-sub"></span></div>
+        <button class="btn primary" data-act="submit">${answered ? nextLabel : 'Submit'}</button>
+      </div>`;
+    const btn = $('[data-act="submit"]', aa);
+    const paintAll = () => {
+      paint();
+      if (w.fixed) S6.forEach((sl, j) => { if (w.fixed[j]) $('.vbl', cell(j)).textContent = w.fixed[j]; });
+      const used = new Set(w.place.filter(x => x !== null));
+      $$('.bank .chip', aa).forEach(c => c.classList.toggle('ghost', used.has(+c.dataset.c)));
+      if (!answered && quiz.state === 'ask') $$('.vbl .chip', qa).forEach(wireChip);
+    };
+    const placeAt = (k, j) => { const from = w.place.indexOf(k); if (from >= 0) w.place[from] = null; w.place[j] = k; w.msg = null; showMsg(); paintAll(); };
+    const unplace = k => { const from = w.place.indexOf(k); if (from >= 0) w.place[from] = null; paintAll(); };
+    const firstEmpty = () => order.find(j => w.place[j] === null);
+    // pointer dragging: a copy of the tile follows the finger; a short tap counts as a tap
+    function wireChip(chipEl) {
+      chipEl.onpointerdown = e => {
+        if (quiz.state !== 'ask') return;
+        const k = +chipEl.dataset.c, inBank = !!chipEl.closest('.bank');
+        if (inBank && chipEl.classList.contains('ghost')) return;
+        e.preventDefault();
+        const sx = e.clientX, sy = e.clientY;
+        let ghost = null;
+        const move = ev => {
+          if (!ghost && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) {
+            ghost = chipEl.cloneNode(true); ghost.classList.add('drag'); document.body.appendChild(ghost);
+            chipEl.classList.add('lifted');
+          }
+          if (ghost) { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; }
+        };
+        const up = ev => {
+          window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+          chipEl.classList.remove('lifted');
+          if (!ghost) { // a tap
+            if (inBank) { const j = firstEmpty(); if (j !== undefined) placeAt(k, j); } else unplace(k);
+            return;
+          }
+          ghost.remove();
+          const target = document.elementFromPoint(ev.clientX, ev.clientY);
+          const row = target && target.closest('.vrow[data-j]');
+          if (row) placeAt(k, +row.dataset.j);
+          else if (!inBank) unplace(k);
+        };
+        window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+      };
+    }
+    $$('.bank .chip', aa).forEach(wireChip);
+    btn.onclick = () => {
+      if (quiz.state === 'answered') return advance();
+      if (w.place.some(x => x === null)) { setMsg('Fill every blank first.', 'warn'); return; }
+      quiz.tries++;
+      const good = S6.map((_, j) => check(j) === 'correct');
+      if (good.every(Boolean)) { S6.forEach((_, j) => { w.status[j] = 'good'; }); finish(good); }
+      else if (quiz.tries >= 3) { reveal(good); finish(good); }
+      else { const left = 3 - quiz.tries; setMsg('Not quite. Some forms are wrong.', 'warn', `Tap a placed form to send it back. ${left} ${left === 1 ? 'try' : 'tries'} left`); return; }
+      btn.textContent = nextLabel; linkVerb(); paintAllDone();
+    };
+    const paintAllDone = () => {
+      // show what was placed (green) and the corrections (red), and lock the tiles
+      S6.forEach((sl, j) => { const b = $('.vbl', cell(j)); b.className = 'vbl ' + w.status[j]; b.textContent = w.status[j] === 'fixed' ? w.fixed[j] : cellText(j); });
+      $$('.chip', aa).forEach(c => { c.onpointerdown = null; });
+      $('.dnd-hint', aa).style.visibility = 'hidden';
+      fitCells();
+    };
+    paintAll();
+    if (answered) { paintAllDone(); linkVerb(); }
+    showMsg();
+    // keep everything on one screen: on smaller phones the tiles get a little smaller
+    requestAnimationFrame(() => {
+      const chips = $$('.bank .chip', aa);
+      let size = 19;
+      while (aa.scrollHeight > aa.clientHeight + 1 && size > 14) {
+        size -= 1;
+        chips.forEach(c => { c.style.fontSize = size + 'px'; c.style.padding = (size > 16 ? 6 : 4) + 'px ' + (size > 16 ? 12 : 9) + 'px'; });
+      }
+    });
   }
 
   /* ---------------- Settings ---------------- */
@@ -562,6 +956,7 @@
     learned: { label: 'Learned', sub: 'answered correctly 5 times in a row', action: 'Remove' },
     incorrect: { label: 'Incorrect Answers', sub: 'phrases you missed, until you get them right', action: 'Remove' },
   };
+  const VB_SUB = { custom: 'verbs and tenses you starred', review: 'forms you’ve been quizzed on', incorrect: 'verbs and tenses you missed, until you get them right' };
   function sourceCount(key) {
     if (key === 'custom') return data.custom.length;
     if (key === 'review') return reviewKeys().length;
@@ -571,14 +966,14 @@
   }
 
   function viewSettings() {
-    const s = settings;
+    const s = settings, vb = mod === 'vb';
     const left = ['je', 'tu', 'il', 'elle', 'on'], right = ['nous', 'vous', 'ils', 'elles'];
     let lastBackup = null; try { lastBackup = +localStorage.getItem('apprenez.lastBackup') || null; } catch (e) { /* ignore */ }
     const node = el(`
       <div class="screen page">
         <header class="bar">
           <button class="icon" data-act="close" aria-label="Back to quiz">${ICON.close}</button>
-          <div class="bar-title">Settings</div>
+          <div class="bar-title">Settings · ${esc(MOD_NAME[mod])}</div>
           <div class="bar-right"></div>
         </header>
         <div class="content">
@@ -597,10 +992,10 @@
             <h3>Question Type</h3>
             <div class="checks" data-set="types">
               ${check('fill', 'Fill in the blank', s.types.fill)}
-              ${check('mc', 'Multiple choice', s.types.mc)}
+              ${vb ? check('dnd', 'Drag and drop', s.types.dnd) : check('mc', 'Multiple choice', s.types.mc)}
             </div>
             <p class="warn-note" data-warn="types">Select at least one question type.</p>
-            <h3>Question Form</h3>
+            ${vb ? '' : `<h3>Question Form</h3>
             <div class="checks" data-set="forms">
               ${check('en', 'English', s.forms.en, 'Questions are shown in English; answer in French')}
               ${check('fr', 'French', s.forms.fr, 'Questions are French sentences with a blank')}
@@ -612,23 +1007,23 @@
               ${check('pron', 'Pronouns', s.answerForms.pron, 'Fill in the subject and the other pronouns')}
             </div>
             <p class="group-note muted">With both selected, you may be asked for the verb, the pronouns, or the whole sentence.</p>
-            <p class="warn-note" data-warn="answerForms">Select at least one answer form.</p>
+            <p class="warn-note" data-warn="answerForms">Select at least one answer form.</p>`}
           </section>
 
           <section class="group">
             <h2>Question Content</h2>
-            <h3>Subject Pronouns</h3>
+            ${vb ? '' : `<h3>Subject Pronouns</h3>
             <div class="checks two" data-set="pronouns">
               <div>${left.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
               <div>${right.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
             </div>
-            <p class="warn-note" data-warn="pronouns">Select at least one pronoun.</p>
+            <p class="warn-note" data-warn="pronouns">Select at least one pronoun.</p>`}
             <h3>Tenses</h3>
             <div class="checks" data-set="tenses">
               ${V.TENSES.map(t => check(t.id, `<span lang="fr">${t.label}</span>`, s.tenses[t.id])).join('')}
             </div>
             <p class="warn-note" data-warn="tenses">Select at least one tense.</p>
-            <h3>Other Verbs</h3>
+            ${vb ? '' : `<h3>Other Verbs</h3>
             <div class="checks" data-set="otherVerbs">
               ${check('modal', 'Modal verbs', s.otherVerbs.modal, '<span lang="fr">pouvoir, vouloir, devoir, savoir, falloir</span> + infinitive')}
             </div>
@@ -640,10 +1035,10 @@
               ${check('y', '<span lang="fr">y</span>', s.objPron.y, 'there, about it, in it…')}
               ${check('en', '<span lang="fr">en</span>', s.objPron.en, 'some, about it, from there…')}
             </div>
-            <p class="group-note muted">With all of these off, questions use only the subject and the verb.</p>
+            <p class="group-note muted">With all of these off, questions use only the subject and the verb.</p>`}
             <h3>Study Content</h3>
             <div class="checks sources" data-set="sources">
-              ${Object.entries(SOURCES).map(([id, o]) => `
+              ${Object.entries(SOURCES).map(([id, o]) => (vb && VB_SUB[id] ? Object.assign({}, o, { sub: VB_SUB[id] }) : o)).map((o, n) => [Object.keys(SOURCES)[n], o]).map(([id, o]) => `
                 <div class="source">
                   <div class="source-row">
                     ${check(id, o.label, s.sources[id], o.sub)}
@@ -656,18 +1051,18 @@
 
           <section class="group">
             <h2>Backup</h2>
-            <p class="muted">Save your progress, lists and settings to a file, for example in iCloud Drive. Restore it on this or another device.</p>
+            <p class="muted">Saves your progress, lists and settings for <strong>both modules</strong> in one .zip file, for example in iCloud Drive, with a separate file inside for each module. Restore Backup takes that .zip, or one module’s file on its own.</p>
             <div class="row-btns">
               <button class="btn" data-act="backup">Save Backup</button>
               <button class="btn" data-act="restore">Restore Backup</button>
             </div>
             <p class="foot-note muted">${lastBackup ? 'Last backup: ' + fmtDate(lastBackup) : 'No backup saved yet.'}</p>
-            <input type="file" id="restore-file" accept=".json,application/json" hidden>
+            <input type="file" id="restore-file" accept=".zip,.json,application/zip,application/json" hidden>
           </section>
 
           <section class="group danger-zone">
             <h2>Delete Data</h2>
-            <p class="muted">Removes all of your results, your In Review, Learned and Incorrect Answers lists, and your Custom verbs. Your settings and the verb lists themselves are kept.</p>
+            <p class="muted">Removes your results and your Custom, In Review, Learned and Incorrect Answers lists for <strong>${esc(MOD_NAME[mod])}</strong> only. ${esc(MOD_NAME[mod === 'vb' ? 'vp' : 'vb'])} keeps its data, and your settings and the verb lists are kept.</p>
             <button class="btn danger" data-act="delete">Delete Data</button>
           </section>
           <p class="foot muted">Your progress is stored only on this device.</p>
@@ -684,7 +1079,7 @@
     });
     const warn = () => {
       const none = o => !Object.values(o).some(Boolean);
-      ['types', 'forms', 'answerForms', 'pronouns', 'tenses', 'sources'].forEach(k => $(`[data-warn="${k}"]`, node).classList.toggle('show', none(s[k])));
+      (vb ? ['types', 'tenses', 'sources'] : ['types', 'forms', 'answerForms', 'pronouns', 'tenses', 'sources']).forEach(k => $(`[data-warn="${k}"]`, node).classList.toggle('show', none(s[k])));
     };
     $$('[data-set]', node).forEach(set => {
       const key = set.dataset.set;
@@ -736,21 +1131,78 @@
   }
 
   /* ---------------- Backup ---------------- */
+  /* A small .zip writer and reader (files stored uncompressed; the reader also opens compressed zips) */
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  function makeZip(files) {
+    const enc = new TextEncoder(), parts = [], central = [];
+    let off = 0;
+    const d = new Date(), dt = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)), dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate());
+    files.forEach(f => {
+      const name = enc.encode(f.name), body = enc.encode(f.text), crc = crc32(body);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+      h.setUint16(10, dt, true); h.setUint16(12, dd, true); h.setUint32(14, crc, true); h.setUint32(18, body.length, true); h.setUint32(22, body.length, true);
+      h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+      c.setUint16(12, dt, true); c.setUint16(14, dd, true); c.setUint32(16, crc, true); c.setUint32(20, body.length, true); c.setUint32(24, body.length, true);
+      c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+      parts.push(new Uint8Array(h.buffer), name, body); central.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + body.length;
+    });
+    const csize = central.reduce((a, x) => a + x.length, 0);
+    const e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csize, true); e.setUint32(16, off, true);
+    return new Blob(parts.concat(central, [new Uint8Array(e.buffer)]), { type: 'application/zip' });
+  }
+  async function readZip(buf) {
+    const dv = new DataView(buf), u8 = new Uint8Array(buf), dec = new TextDecoder();
+    let e = -1;
+    for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('not a zip');
+    const n = dv.getUint16(e + 10, true);
+    let p = dv.getUint32(e + 16, true);
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+      const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), loc = dv.getUint32(p + 42, true);
+      const name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+      p += 46 + nlen + xlen + clen;
+      const start = loc + 30 + dv.getUint16(loc + 26, true) + dv.getUint16(loc + 28, true);
+      const raw = u8.subarray(start, start + csize);
+      if (!/\.json$/i.test(name) || /(^|\/)(__MACOSX|\._)/.test(name)) continue;
+      let bytes;
+      if (method === 0) bytes = raw;
+      else if (method === 8 && typeof DecompressionStream !== 'undefined') bytes = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      else continue;
+      out.push({ name, text: dec.decode(bytes) });
+    }
+    return out;
+  }
+
+  // Backup: one .zip with a file for each module
+  const MOD_FILE = { vp: 'verbs-and-pronouns.json', vb: 'verbs.json' };
   async function saveBackup() {
     const now = new Date();
-    const payload = { app: 'apprenez-le-francais', version: 1, exportedAt: now.toISOString(), settings, data };
-    const name = `apprenez-backup-${now.toISOString().slice(0, 10)}.json`;
-    const text = JSON.stringify(payload);
+    const files = ['vp', 'vb'].map(m => {
+      const st = m === mod ? settings : settingsFor(m, load(KEYS[m].s, null));
+      const dt = m === mod ? data : dataFor(load(KEYS[m].d, {}));
+      return { name: MOD_FILE[m], text: JSON.stringify({ app: 'apprenez-le-francais', version: 2, module: m, moduleName: MOD_NAME[m], exportedAt: now.toISOString(), settings: st, data: dt }) };
+    });
+    files.push({ name: 'README.txt', text: 'Apprenez le français ! backup, ' + now.toISOString().slice(0, 10) + '.\nOne file per module. Restore the whole .zip, or one module’s .json file, from Settings → Restore Backup.\n' });
+    const blob = makeZip(files);
+    const name = `apprenez-backup-${now.toISOString().slice(0, 10)}.zip`;
     const markSaved = () => { try { localStorage.setItem('apprenez.lastBackup', String(Date.now())); } catch (e) { /* ignore */ } render(); };
     let file = null;
-    try { file = new File([text], name, { type: 'application/json' }); } catch (e) { /* old browser */ }
+    try { file = new File([blob], name, { type: 'application/zip' }); } catch (e) { /* old browser */ }
     // iPhone: the share sheet offers "Save to Files"
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: 'Apprenez le français ! backup' }); markSaved(); toast('Backup saved.'); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
     try {
-      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      const url = URL.createObjectURL(blob);
       const a = el(`<a href="${url}" download="${name}"></a>`);
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -758,28 +1210,29 @@
     } catch (e) { toast('This browser could not save the file.'); }
   }
 
-  function readBackup(file) {
-    const r = new FileReader();
-    r.onload = () => {
-      let b;
-      try { b = JSON.parse(r.result); } catch (e) { b = null; }
-      if (!b || b.app !== 'apprenez-le-francais' || !b.data || typeof b.data.forms !== 'object') {
-        toast('That file isn’t an Apprenez backup.'); return;
-      }
-      const when = b.exportedAt ? fmtDate(Date.parse(b.exportedAt)) : 'an unknown date';
-      const n = Object.keys(b.data.forms).length;
-      modal({
-        title: 'Restore Backup', confirm: 'Restore',
-        body: `Restore the backup from ${when} (${fmtNum(n)} verb ${n === 1 ? 'form' : 'forms'} studied)? It replaces your current progress, lists and settings.`,
-        onConfirm: () => {
-          settings = migrateSettings(b.settings || null); saveSettings();
-          data = Object.assign(EMPTY_DATA(), b.data); saveData();
-          if (quiz) quiz.sig = '';
-          render(); toast('Backup restored.');
-        },
-      });
-    };
-    r.readAsText(file);
+  async function readBackup(file) {
+    let payloads = [];
+    try {
+      const buf = await file.arrayBuffer();
+      const u8 = new Uint8Array(buf);
+      const texts = u8[0] === 0x50 && u8[1] === 0x4B ? (await readZip(buf)).map(f => f.text) : [new TextDecoder().decode(u8)];
+      texts.forEach(t => { try { payloads.push(JSON.parse(t)); } catch (e) { /* not JSON */ } });
+    } catch (e) { payloads = []; }
+    payloads = payloads.filter(b => b && b.app === 'apprenez-le-francais' && b.data && typeof b.data.forms === 'object')
+      .map(b => Object.assign(b, { module: b.module === 'vb' ? 'vb' : 'vp' })); // backups from before the Verbs module are Verbs & Pronouns
+    if (!payloads.length) { toast('That file isn’t an Apprenez backup.'); return; }
+    const when = payloads[0].exportedAt ? fmtDate(Date.parse(payloads[0].exportedAt)) : 'an unknown date';
+    const list = payloads.map(b => { const n = Object.keys(b.data.forms).length; return `${MOD_NAME[b.module]} (${fmtNum(n)} verb ${n === 1 ? 'form' : 'forms'} studied)`; }).join(' and ');
+    modal({
+      title: 'Restore Backup', confirm: 'Restore',
+      body: `Restore the backup from ${when}: ${list}? It replaces the progress, lists and settings of ${payloads.length > 1 ? 'both modules' : 'that module'}.`,
+      onConfirm: () => {
+        payloads.forEach(b => { save(KEYS[b.module].s, settingsFor(b.module, b.settings || null)); save(KEYS[b.module].d, dataFor(b.data)); });
+        settings = settingsFor(mod, load(KEYS[mod].s, null)); data = dataFor(load(KEYS[mod].d, {}));
+        if (quiz) quiz.sig = '';
+        render(); toast('Backup restored.');
+      },
+    });
   }
 
   /* ---------------- Verb list pages ---------------- */
@@ -807,6 +1260,14 @@
           right: listKey === 'review' ? dots(f.streak) : '', match: p.id,
         };
       });
+    } else if (mod === 'vb' && (listKey === 'custom' || listKey === 'incorrect')) {
+      // Verbs module: whole tenses ("prendre · passé composé")
+      const keys = listKey === 'custom' ? data.custom.slice().reverse() : missedKeys();
+      items = keys.map(k => {
+        const [id, t] = listKey === 'custom' ? k.split('|') : [data.missed[k].v, data.missed[k].t];
+        const v = V.BY_ID[id];
+        return v && { key: k, verb: id, title: id, fr: true, sub: `${V.TENSE_LABEL[t] || t} · ${V.englishGloss(v)}`, match: id };
+      }).filter(Boolean);
     } else if (listKey === 'incorrect') {
       items = missedKeys().map(k => {
         const m = data.missed[k];
@@ -913,7 +1374,7 @@
     return node;
   }
 
-  const noun = n => (listKey === 'incorrect' ? (n === 1 ? 'phrase' : 'phrases') : listKey === 'review' || listKey === 'learned' ? (n === 1 ? 'form' : 'forms') : (n === 1 ? 'verb' : 'verbs'));
+  const noun = n => (mod === 'vb' && (listKey === 'custom' || listKey === 'incorrect') ? (n === 1 ? 'verb tense' : 'verb tenses') : listKey === 'incorrect' ? (n === 1 ? 'phrase' : 'phrases') : listKey === 'review' || listKey === 'learned' ? (n === 1 ? 'form' : 'forms') : (n === 1 ? 'verb' : 'verbs'));
   /* ---------------- Verb page ---------------- */
   const GROUP_NAME = { 1: 'first group', 2: 'second group', 3: 'third group' };
   const AUX_NAME = { a: 'avoir', e: 'être', E: 'être or avoir' };
@@ -951,7 +1412,7 @@
         <header class="bar">
           <button class="icon back-text" data-act="back" aria-label="Back to ${esc(backLabel)}">${ICON.back}<span>${esc(backLabel)}</span></button>
           <div class="bar-title"></div>
-          <div class="bar-right"><button class="icon star" data-act="star">${ICON.star}</button><button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button></div>
+          <div class="bar-right">${mod === 'vb' ? '' : `<button class="icon star" data-act="star">${ICON.star}</button>`}<button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button></div>
         </header>
         <div class="content">
           <h1 class="verb-title" lang="fr">${esc(v.id)}</h1>
@@ -970,6 +1431,7 @@
     const ml = $('[data-act="meanings"]', node);
     if (ml) ml.onclick = e => { e.preventDefault(); verbScroll = window.scrollY; go('meanings'); };
     const star = $('[data-act="star"]', node);
+    if (star) {
     const setStar = () => {
       const on = isCustom(v.id);
       star.classList.toggle('on', on); star.setAttribute('aria-pressed', on);
@@ -977,6 +1439,7 @@
     };
     setStar();
     star.onclick = () => { const on = toggleCustom(v.id); setStar(); toast(on ? `${v.id} added to Custom` : `${v.id} removed from Custom`); };
+    }
     return node;
   }
 
@@ -1122,11 +1585,11 @@
           <div class="bar-right"></div>
         </header>
         <div class="content">
-          <nav class="gd-jump"><a href="#" data-jump="g-verbs">Verbs</a><a href="#" data-jump="g-pron">Pronouns</a></nav>
+          ${mod === 'vb' ? '' : '<nav class="gd-jump"><a href="#" data-jump="g-verbs">Verbs</a><a href="#" data-jump="g-pron">Pronouns</a></nav>'}
           <h2 class="gd-h" id="g-verbs">Verbs</h2>
           ${G.verbs.map(x => item(x, TENSE_COLOR[x.id])).join('')}
-          <h2 class="gd-h" id="g-pron">Pronouns</h2>
-          ${G.pronouns.map(x => item(x)).join('')}
+          ${mod === 'vb' ? '' : `<h2 class="gd-h" id="g-pron">Pronouns</h2>
+          ${G.pronouns.map(x => item(x)).join('')}`}
         </div>
       </div>`);
     $('[data-act="close"]', node).onclick = () => { const y = guideScroll; go(guideFrom); if (guideFrom !== 'quiz') requestAnimationFrame(() => window.scrollTo(0, y)); };
@@ -1141,7 +1604,7 @@
     const ev = data.events.filter(e => e.t >= since);
     const vs = verbStats();
     return {
-      forms: new Set(ev.map(e => e.k)).size,
+      forms: new Set(ev.flatMap(e => e.fk || [e.k])).size,
       answered: ev.length,
       wrong: ev.filter(e => !e.ok).length,
       complete: Object.keys(vs).filter(id => V.BY_ID[id] && vs[id].learned >= V.nForms(V.BY_ID[id]) && vs[id].lastLearned >= since).length,
