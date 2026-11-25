@@ -268,6 +268,125 @@
     return { ans, before, after, english: english(v, tense, pronoun, spec, pat), cues: cuesOf(pat, spec), spec, pattern: pat, clitics, vf, mode };
   }
 
+
+  /* ---------- Modal verbs + infinitive: je peux le faire, il faut y aller, elle veut se reposer ---------- */
+  const MODALS = ['pouvoir', 'vouloir', 'devoir', 'savoir', 'falloir'];
+  // verbs that need something after them, or don't make sense after a modal
+  const NO_INNER = new Set(MODALS.concat(['être', 'devenir', 'sembler', 'paraître', "s'appeler", 'se sentir', 'naître', 'désirer', 'posséder', 'ignorer']));
+  // things you don't want, must or need to do on purpose ("je veux tomber")
+  const NON_VOL = new Set(['mourir', 'échouer', 'se blesser', "s'évanouir", 'se tromper', 'ignorer', 'rougir', 'tomber', 'glisser',
+    'vieillir', 'souffrir', "s'ennuyer", 'trembler', 'apparaître', 'appartenir', 'ressembler', 'grandir', 'maigrir', 'disparaître',
+    'se perdre', 'perdre', 'oublier', 'rater', 'manquer', 'craindre', 'fâcher', 'se fâcher', 'ennuyer', 'inquiéter', "s'inquiéter",
+    'douter', 'regretter', 'mériter', 'tousser', 'pleurer', 'geler', 'fondre', 'apercevoir', 'prévoir', 'détester', 'adorer', 'préférer',
+    'connaître', 'remarquer', 'surprendre', 'étonner', 'intéresser', 'plaire', 'hésiter']);
+  // savoir + infinitive = know how to: skills only
+  const SKILLS = new Set(['nager', 'conduire', 'cuisiner', 'lire', 'écrire', 'danser', 'chanter', 'skier', 'patiner', 'coudre', 'dessiner',
+    'peindre', 'compter', 'jouer', 'parler', 'cuire', 'plonger', 'siffler', 'réparer', 'faire', 'utiliser', 'construire', 'prononcer',
+    'traduire', 'nettoyer', 'repasser', 'grimper', 'courir', 'lancer', 'attraper']);
+  const isModal = id => MODALS.includes(id);
+  // can this modal go with this infinitive (and pattern)?
+  function modalOk(modalId, v, pat, pronoun) {
+    if (NO_INNER.has(v.id)) return false;
+    V.forms(v); if (v.impersonal) return false;
+    if (modalId === 'falloir' && (pronoun !== 'il' || v.id === 'avoir')) return false;
+    if (modalId !== 'pouvoir' && NON_VOL.has(v.id)) return false;
+    if (modalId === 'savoir' && (!SKILLS.has(v.id) || !['S', 'do'].includes(pat.type))) return false;
+    if (pat.type === 'S' && (/…$/.test(pat.enForms || '') || / to$/.test(v.enF[0]) && !pat.enForms)) return false; // "able to…"
+    return true;
+  }
+
+  // English: "can", "had to", "would like to"… + the infinitive phrase. P = perfect infinitive phrase ("done it")
+  const MODAL_EN = {
+    pouvoir: { present: 'can V', imparfait: 'could V', pc: 'WAS able to V', ps: 'WAS able to V', futur: 'will be able to V', cond: 'could V',
+      pqp: 'had been able to V', fa: 'will have been able to V', cp: 'could have P', subj: 'can V' },
+    devoir: { present: 'HAVE to V', imparfait: 'had to V', pc: 'had to V', ps: 'had to V', futur: 'will have to V', cond: 'should V',
+      pqp: 'had had to V', fa: 'will have had to V', cp: 'should have P', subj: 'HAVE to V' },
+    vouloir: { present: 'WANT to V', imparfait: 'wanted to V', pc: 'wanted to V', ps: 'wanted to V', futur: 'will want to V', cond: 'would like to V',
+      pqp: 'had wanted to V', fa: 'will have wanted to V', cp: 'would have liked to V', subj: 'WANT to V' },
+    savoir: { present: 'KNOW how to V', imparfait: 'knew how to V', pc: 'knew how to V', ps: 'knew how to V', futur: 'will know how to V',
+      cond: 'would know how to V', pqp: 'had known how to V', fa: 'will have known how to V', cp: 'would have known how to V', subj: 'KNOW how to V' },
+    falloir: { present: 'is necessary to V', imparfait: 'was necessary to V', pc: 'was necessary to V', ps: 'was necessary to V',
+      futur: 'will be necessary to V', cond: 'would be necessary to V', pqp: 'had been necessary to V', fa: 'will have been necessary to V',
+      cp: 'would have been necessary to V', subj: 'be necessary to V' },
+  };
+  const EN_SUBJ = { je: 'I', tu: 'you (sing.)', il: 'he', elle: 'she', on: 'one', nous: 'we', vous: 'you (pl.)', ils: 'they (m.)', elles: 'they (f.)' };
+  const capF = x => x.charAt(0).toUpperCase() + x.slice(1);
+  // the infinitive's English with its objects: "give it (m.) to him"; perfect: "given it (m.) to him"
+  function innerEnglish(v, pat, spec, pronoun, perfect) {
+    const subj = EN_SUBJ[pronoun];
+    const s = english(v, perfect ? 'pqp' : 'subj', pronoun, spec, pat).replace(/[.!…]$/, '');
+    return perfect ? s.slice((capF(subj) + ' had ').length) : s.slice(('…that ' + subj + ' ').length);
+  }
+  function modalEnglish(m, v, tense, pronoun, spec, pat) {
+    const fal = m.id === 'falloir';
+    const ep = fal ? 'on' : pronoun; // il faut se lever: "to get (oneself) up"
+    const third = ['il', 'elle', 'on'].includes(pronoun), wasP = pronoun === 'je' || third;
+    const subj = fal ? 'it' : EN_SUBJ[pronoun];
+    const tpl = MODAL_EN[m.id][tense];
+    const phrase = tpl.replace('WAS', wasP ? 'was' : 'were').replace('HAVE', third ? 'has' : 'have')
+      .replace('WANT', third ? 'wants' : 'want').replace('KNOW', third ? 'knows' : 'know')
+      .replace(/\bV$/, innerEnglish(v, pat, spec, ep, false)).replace(/\bP$/, innerEnglish(v, pat, spec, ep, true));
+    return tense === 'subj' ? '…that ' + subj + ' ' + phrase + '.' : capF(subj) + ' ' + phrase + '.';
+  }
+  // pronouns in front of the infinitive, with elision: "le lui", "l'", "m'en"
+  function clitStr(cl, inf, v) {
+    const out = [];
+    let next = inf;
+    for (let i = cl.length - 1; i >= 0; i--) {
+      let w = cl[i];
+      if (/^(me|te|se|le|la)$/.test(w) && elides(next, v)) w = w[0] + "'";
+      out.unshift(w); next = w;
+    }
+    let str = '';
+    out.forEach(w => { str += (str && !str.endsWith("'") ? ' ' : '') + w; });
+    return str;
+  }
+  const withInf = (cs, inf) => (cs ? joinPV(cs, inf) : inf);
+
+  function buildModal(m, v, tense, pronoun, pat, mode, specIn) {
+    if (tense === 'imperatif' || !modalOk(m.id, v, pat, pronoun)) return null;
+    const mp = V.verbPart(m, tense, pronoun);
+    if (!mp) return null;
+    let spec = specIn || makeSpec(pat, pronoun);
+    // "il faut me battre": with falloir, people as direct objects sound odd, so use it/them
+    for (let k = 0; !specIn && m.id === 'falloir' && spec.do && (NEAR.includes(spec.do.p) || spec.do.h) && k < 12; k++) spec = makeSpec(pat, pronoun);
+    if (m.id === 'falloir' && spec.do && (NEAR.includes(spec.do.p) || spec.do.h) && !specIn) return null;
+    const cl = cliticsOf(spec, pronoun);
+    if (mode === 'pron' && !cl.length) return null;
+    const cs = clitStr(cl, v.inf, v), tail = withInf(cs, v.inf);
+    const subjOf = f => prefixFor(pronoun, [], f, m);
+    const fulls = mp.alts.map(f => joinPV(subjOf(f), f) + ' ' + tail);
+    let ans, before = '', after = '';
+    if (mode === 'verb') { ans = { blank: mp.canon, acceptBlank: mp.alts, acceptFull: fulls, full: fulls[0] }; before = subjOf(mp.canon); after = tail; }
+    else if (mode === 'pron') { ans = { blank: cs, acceptBlank: [cs], acceptFull: fulls, full: fulls[0] }; before = joinPV(subjOf(mp.canon), mp.canon); after = v.inf; }
+    else ans = { blank: fulls[0], acceptBlank: fulls, acceptFull: fulls, full: fulls[0] };
+    return { ans, before, after, english: modalEnglish(m, v, tense, pronoun, spec, pat), cues: cuesOf(pat, spec), spec, pattern: pat,
+      clitics: cl, vf: { forms: mp.alts }, mode, modal: m.id, inner: v.id, cs };
+  }
+  function modalOptions(q, m, v, tense, pronoun) {
+    const cl = q.clitics, mf = q.vf.forms[0], subj = prefixFor(pronoun, [], mf, m);
+    const wrongCl = [];
+    for (let i = 0; i + 1 < cl.length; i++) { const d = cl.slice(); [d[i], d[i + 1]] = [d[i + 1], d[i]]; wrongCl.push(clitStr(d, v.inf, v)); }
+    cl.forEach((w, i) => (SWAP[w] || []).forEach(x => { const d = cl.slice(); d[i] = x; wrongCl.push(clitStr(d, v.inf, v)); }));
+    if (q.cs.includes("'")) wrongCl.push(cl.join(' '));
+    ['le', 'lui', 'y', 'en'].forEach(x => { if (!cl.includes(x)) wrongCl.push(clitStr(cl.concat([x]), v.inf, v)); });
+    const wrongM = V.distractors(m, tense, pronoun);
+    let cands;
+    if (q.mode === 'verb') cands = V.shuffle(wrongM.slice());
+    else if (q.mode === 'pron') cands = V.shuffle(wrongCl);
+    else {
+      const tail = withInf(q.cs, v.inf);
+      cands = [];
+      // the classic mistake: the pronouns in front of the modal ("je le peux faire")
+      if (cl.length && !AUX_TENSE[tense]) cands.push(joinPV(prefixFor(pronoun, cl, mf, m), mf) + ' ' + v.inf);
+      cands = cands.concat(V.shuffle(wrongCl.map(c => joinPV(subj, mf) + ' ' + withInf(c, v.inf)).concat(wrongM.map(w => joinPV(prefixFor(pronoun, [], w, m), w) + ' ' + tail))));
+    }
+    const ok = new Set(q.ans.acceptBlank.map(norm));
+    const out = [], seen = new Set(ok);
+    for (const x of cands) { const n = norm(x); if (!x || seen.has(n)) continue; seen.add(n); out.push(x); if (out.length === 3) break; }
+    return out;
+  }
+
   /* ---------- Multiple-choice wrong answers ---------- */
   const norm = s => V.norm(s);
   const SWAP = { le: ['la', 'les', 'lui'], la: ['le', 'les', 'lui'], les: ['leur', 'le', 'la'], lui: ['le', 'leur', 'la'], leur: ['les', 'lui'],
@@ -308,6 +427,7 @@
     return V.shuffle(out);
   }
   function options(q, v, tense, pronoun) {
+    if (q.modal) return modalOptions(q, V.BY_ID[q.modal], V.BY_ID[q.inner], tense, pronoun);
     const ok = new Set(q.ans.acceptBlank.map(norm));
     let cands = [];
     if (q.imp) {
@@ -339,5 +459,5 @@
     return out;
   }
 
-  root.Sentences = { parse, build, options, catsOf };
+  root.Sentences = { parse, build, options, catsOf, buildModal, modalOk, isModal, MODALS, SKILLS };
 })(typeof window !== 'undefined' ? window : this);

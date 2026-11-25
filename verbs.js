@@ -326,6 +326,7 @@
     VERBS, BY_ID, COMMON, nForms, englishGloss, sortKey, verbPart, assemble, answer, english, check, norm, strip, distractors,
     formKey, parseKey, formLabel, shuffle,
     isHAspire: v => H_ASPIRE.has(v.inf),
+    forms,
     englishSubject: (pronoun, v) => { if (v) forms(v); return v && v.impersonal && pronoun === 'il' ? 'it' : EN_SUBJ[pronoun]; },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

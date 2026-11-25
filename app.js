@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '14';
+  const APP_VERSION = '15';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -23,6 +23,7 @@
     forms: { en: true, fr: true },
     answerForms: { verb: true, pron: true },
     objPron: { do: true, io: true, refl: true, y: true, en: true },
+    otherVerbs: { modal: false },
     pronouns: Object.fromEntries(V.PRONOUNS.map(p => [p, true])),
     tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
     sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false },
@@ -82,7 +83,8 @@
     // Incorrect Answers: the exact phrase is kept until it's answered correctly
     const mk = [q.verb.id, q.tense, q.pronoun, q.ans.full].join('|');
     if (ok) delete data.missed[mk];
-    else data.missed[mk] = { v: q.verb.id, t: q.tense, p: q.pronoun, pi: q.patIndex, pt: q.patType, spec: q.spec, mode: q.mode, full: q.ans.full, en: q.english, at: now };
+    else data.missed[mk] = { v: q.verb.id, t: q.tense, p: q.pronoun, pi: q.patIndex, pt: q.patType, spec: q.spec, mode: q.mode, full: q.ans.full, en: q.english, at: now,
+      inner: q.inner ? q.inner.id : undefined };
     saveData();
   }
   const missedKeys = () => Object.keys(data.missed).filter(k => V.BY_ID[data.missed[k].v]).sort((a, b) => data.missed[b].at - data.missed[a].at);
@@ -126,6 +128,7 @@
     };
   }
 
+  const COMMON_IDS = V.VERBS.filter(x => x.common).map(x => x.id);
   function makeQuestion(c) {
     const kinds = [settings.types.fill && 'fill', settings.types.mc && 'mc'].filter(Boolean);
     const forms = [settings.forms.en && 'en', settings.forms.fr && 'fr'].filter(Boolean);
@@ -137,8 +140,8 @@
     const m = c.miss && data.missed[c.miss];
     if (m) {
       // replay a missed phrase: same pattern, same pronouns, same thing to fill in
-      pat = all[m.pi] && all[m.pi].type === m.pt ? all[m.pi] : all.find(p => p.type === m.pt);
-      if (!pat) { delete data.missed[c.miss]; saveData(); return null; }
+      if (!m.inner) pat = all[m.pi] && all[m.pi].type === m.pt ? all[m.pi] : all.find(p => p.type === m.pt);
+      if (!pat && !m.inner) { delete data.missed[c.miss]; saveData(); return null; }
       mode = m.mode; spec = m.spec;
     } else {
       let pats = all.filter(p => p.cats.every(k => settings.objPron[k]));
@@ -147,13 +150,48 @@
       pat = pick(pats);
       mode = af.verb && af.pron ? pick(pat.type === 'S' ? ['verb', 'both'] : ['verb', 'pron', 'both']) : af.verb ? 'verb' : 'pron';
     }
-    const b = S.build(v, c.tense, c.pronoun, pat, mode, spec);
+    // Modal verbs + infinitive ("je peux le faire"): the modal is conjugated, the infinitive carries the pronouns
+    let b = null, modal = null, inner = null, ipats = all;
+    if (m && m.inner) {
+      modal = v; inner = V.BY_ID[m.inner];
+      if (inner) { ipats = S.parse(inner.pats); pat = ipats[m.pi] && ipats[m.pi].type === m.pt ? ipats[m.pi] : ipats.find(p => p.type === m.pt); }
+      b = inner && pat ? S.buildModal(modal, inner, c.tense, c.pronoun, pat, mode, spec) : null;
+      if (!b) { delete data.missed[c.miss]; saveData(); return null; }
+    } else if (!m && settings.otherVerbs.modal && c.tense !== 'imperatif') {
+      const usable = p => p.cats.every(k => settings.objPron[k]) && (af.verb || p.type !== 'S');
+      const pickMode = p => (af.verb && af.pron ? pick(p.type === 'S' ? ['verb', 'both'] : ['verb', 'pron', 'both']) : af.verb ? 'verb' : 'pron');
+      if (S.isModal(v.id) && Math.random() < 0.7) {
+        // the drawn verb is a modal: pair it with a Common Verb that fits
+        modal = v;
+        for (let k = 0; k < 30 && !b; k++) {
+          const iv = V.BY_ID[pick(modal.id === 'savoir' ? [...S.SKILLS] : COMMON_IDS)];
+          if (!iv) continue;
+          const ps = S.parse(iv.pats).filter(p => usable(p) && S.modalOk(modal.id, iv, p, c.pronoun));
+          if (!ps.length) continue;
+          const ip = pick(ps); b = S.buildModal(modal, iv, c.tense, c.pronoun, ip, pickMode(ip));
+          if (b) { inner = iv; ipats = S.parse(iv.pats); pat = ip; mode = b.mode; }
+        }
+        if (!b) modal = null;
+      } else if (!S.isModal(v.id) && Math.random() < 0.4) {
+        // the drawn verb becomes the infinitive after a modal that fits
+        const opts = S.MODALS.filter(id => all.some(p => usable(p) && S.modalOk(id, v, p, c.pronoun)));
+        if (opts.length) {
+          modal = V.BY_ID[pick(opts)];
+          const ps = all.filter(p => usable(p) && S.modalOk(modal.id, v, p, c.pronoun));
+          const ip = pick(ps);
+          b = S.buildModal(modal, v, c.tense, c.pronoun, ip, pickMode(ip));
+          if (b) { inner = v; pat = ip; mode = b.mode; } else modal = null;
+        }
+      }
+    }
+    if (!b) b = S.build(v, c.tense, c.pronoun, pat, mode, spec);
     if (!b) return null; // form doesn't exist (e.g. "je faut")
-    const q = { verb: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms), mode,
+    const cv = modal || v; // the conjugated verb
+    const q = { verb: cv, inner, study: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms), mode,
       ans: b.ans, before: b.before, after: b.after, english: b.english, cues: b.cues || [],
-      spec: b.spec, patIndex: all.indexOf(pat), patType: pat.type };
+      spec: b.spec, patIndex: (inner ? ipats : all).indexOf(pat), patType: pat.type };
     if (q.kind === 'mc') {
-      const opts = [b.ans.blank].concat(S.options(b, v, c.tense, c.pronoun));
+      const opts = [b.ans.blank].concat(S.options(b, cv, c.tense, c.pronoun));
       if (opts.length < 3) q.kind = 'fill';
       else {
         const order = V.shuffle(opts.map((_, i) => i));
@@ -327,13 +365,13 @@
     if (quiz.done) { renderSummary(qa, aa); return node; }
 
     const setStar = () => {
-      const on = isCustom(q.verb.id);
+      const on = isCustom((q.study || q.verb).id);
       starBtn.classList.toggle('on', on);
       starBtn.setAttribute('aria-pressed', on);
       starBtn.setAttribute('aria-label', on ? 'Remove verb from Custom list' : 'Add verb to Custom list');
     };
     setStar();
-    starBtn.onclick = () => { const on = toggleCustom(q.verb.id); setStar(); toast(on ? `${q.verb.id} added to Custom` : `${q.verb.id} removed from Custom`); };
+    starBtn.onclick = () => { const sid = (q.study || q.verb).id; const on = toggleCustom(sid); setStar(); toast(on ? `${sid} added to Custom` : `${sid} removed from Custom`); };
 
     // Question
     const tl = V.TENSE_LABEL[q.tense];
@@ -348,8 +386,10 @@
     const SHORT = { subject: 'subj', direct: 'dir', indirect: 'ind', reflexive: 'refl', adverbial: 'adv' };
     const tagged = (t, en) => `<span class="cue"><abbr class="ptag${en ? '' : ' solo'}" title="${t}">${SHORT[t] || t}</abbr>${en ? esc(en) : ''}</span>`;
     if (imp && q.form === 'fr') hintParts.push(`<span class="cue">${esc({ tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun])}</span>`);
-    else if (askPron) hintParts.push(tagged('subject', V.englishSubject(q.pronoun, q.verb)));
-    hintParts.push(`<span lang="fr" class="q-inf">${esc(q.verb.id)}</span>`);
+    // with a modal, the subject isn't part of the pronoun blank ("Je peux ___ faire")
+    else if (askPron && !(q.inner && q.mode === 'pron')) hintParts.push(tagged('subject', q.verb.id === 'falloir' ? 'it' : V.englishSubject(q.pronoun, q.verb)));
+    // both verbs when there are two: pouvoir • faire
+    [q.verb].concat(q.inner ? [q.inner] : []).forEach(x => hintParts.push(`<span lang="fr" class="q-inf" data-id="${esc(x.id)}">${esc(x.id)}</span>`));
     if (askPron) q.cues.forEach(c => hintParts.push(tagged(c.t, c.en)));
     qa.innerHTML = `
       <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : 'Fill in the blank'}</div>
@@ -369,13 +409,12 @@
     const isLast = quiz.i >= quiz.qs.length - 1;
     const nextLabel = isLast ? 'Finish' : 'Next';
     // once answered, the infinitive under the question opens the verb's conjugations; Back returns to the quiz
-    const linkVerb = () => {
-      const s = $('.q-inf', qa); if (!s || s.tagName === 'A') return;
-      const a = document.createElement('a');
-      a.href = '#'; a.className = 'q-inf def-link'; a.lang = 'fr'; a.textContent = q.verb.id;
-      a.onclick = e => { e.preventDefault(); verbId = q.verb.id; verbFrom = 'quiz'; go('verb'); };
+    const linkVerb = () => $$('span.q-inf', qa).forEach(s => {
+      const id = s.dataset.id, a = document.createElement('a');
+      a.href = '#'; a.className = 'q-inf def-link'; a.lang = 'fr'; a.textContent = id;
+      a.onclick = e => { e.preventDefault(); verbId = id; verbFrom = 'quiz'; go('verb'); };
       s.replaceWith(a);
-    };
+    });
     if (quiz.state === 'answered') linkVerb();
     const finishQ = ok => { quiz.state = 'answered'; quiz.lastOk = ok; quiz.results.push({ q, ok }); record(q, ok); $('.pbar div', node).style.width = (quiz.results.length / quiz.qs.length) * 100 + '%'; linkVerb(); };
 
@@ -496,7 +535,7 @@
         </div>
         <ul class="results">
           ${quiz.results.map(r => `<li class="${r.ok ? 'good' : 'bad'}"><span class="mark">${r.ok ? ICON.check : ICON.cross}</span>
-            <span class="r-text"><span lang="fr">${esc(r.q.ans.full)}</span><small>${esc(r.q.verb.id)} · ${esc(V.TENSE_LABEL[r.q.tense])}</small></span></li>`).join('')}
+            <span class="r-text"><span lang="fr">${esc(r.q.ans.full)}</span><small>${esc(r.q.verb.id)}${r.q.inner ? ' + ' + esc(r.q.inner.id) : ''} · ${esc(V.TENSE_LABEL[r.q.tense])}</small></span></li>`).join('')}
         </ul>
       </div>`;
     $('[data-act="home"]', aa).onclick = () => go('home');
@@ -589,6 +628,10 @@
               ${V.TENSES.map(t => check(t.id, `<span lang="fr">${t.label}</span>`, s.tenses[t.id])).join('')}
             </div>
             <p class="warn-note" data-warn="tenses">Select at least one tense.</p>
+            <h3>Other Verbs</h3>
+            <div class="checks" data-set="otherVerbs">
+              ${check('modal', 'Modal verbs', s.otherVerbs.modal, '<span lang="fr">pouvoir, vouloir, devoir, savoir, falloir</span> + infinitive')}
+            </div>
             <h3>Other Pronouns</h3>
             <div class="checks" data-set="objPron">
               ${check('do', 'Direct object', s.objPron.do, '<span lang="fr">me, te, le, la, nous, vous, les</span>')}
