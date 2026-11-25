@@ -34,12 +34,13 @@
   }
 
   /* Choose the object pronouns for a pattern and subject */
-  function makeSpec(pat, pronoun) {
+  function makeSpec(pat, pronoun, imp) {
     const subj = V.SLOT[pronoun];
     const t = pat.type.split('+');
     const spec = {};
-    // not the subject itself ("je me vois" is reflexive) nor a group that includes it ("je nous…")
-    const OVERLAP = { 0: [0, 3], 1: [1, 4], 3: [3, 0], 4: [4, 1] };
+    // not the subject itself ("je me vois" is reflexive) nor a group that includes it ("je nous…");
+    // "let's…" already includes the listener, so not "you" either ("accompagnons-toi")
+    const OVERLAP = { 0: [0, 3], 1: [1, 4], 3: imp ? [3, 0, 1, 4] : [3, 0], 4: [4, 1] };
     const notSubject = p => !(p in PERSON_OF) || !(OVERLAP[subj] || []).includes(PERSON_OF[p]);
     if (t.includes('R')) spec.refl = true;
     if (t.includes('y')) spec.y = true;
@@ -133,9 +134,32 @@
   function fillTail(tail, spec) {
     return tail.replace('{o}', spec.do ? enObject(spec.do) : '').replace('{i}', spec.io ? enIndirect(spec.io) : '');
   }
-  const PARTICLE = / (up|down|out|off|away|back|over|together|apart)$/;
+  /* Subtitle cues: one entry per pronoun, labelled by type, e.g. [{t:'direct', en:'it (m.)'}, {t:'indirect', en:'to him'}] */
+  const PREP = '(?:(to|for|from|at|with|of|about|on|in|by)\\s+)?';
+  function cuesOf(pat, spec) {
+    const out = [];
+    let rest = pat.tail;
+    if (spec.refl) out.push({ t: 'reflexive', en: '' });
+    if (spec.do) {
+      const m = rest.match(new RegExp(PREP + '\\{o\\}(\\s+(?:up|down|out|off|away|back|over|on|again))?'));
+      out.push({ t: 'direct', en: (m && m[1] ? m[1] + ' ' : '') + enObject(spec.do) });
+      if (m) rest = rest.replace(m[0], ' ');
+    }
+    if (spec.io) {
+      const m = rest.match(new RegExp('(?:back\\s+)?' + PREP + '\\{i\\}'));
+      out.push({ t: 'indirect', en: (m && m[1] ? m[1] + ' ' : '') + enIndirect(spec.io) });
+      if (m) rest = rest.replace(m[0], ' ');
+    }
+    if (spec.y || spec.en) {
+      const left = rest.replace(/\{[oi]\}/g, ' ').replace(/\s+/g, ' ').trim();
+      out.push({ t: 'adverbial', en: left });
+    }
+    return out;
+  }
+  const PARTICLE = / (up|down|out|off|away|back|over|together|apart|again)$/;
   function english(v, tense, pronoun, spec, pat) {
-    let vv = pat.enForms ? Object.assign({}, v, { enF: pat.enForms.split('|'), st: false }) : v;
+    // '!' at the start of an override marks a stative verb ("was called", not "was being called")
+    let vv = pat.enForms ? Object.assign({}, v, { enF: pat.enForms.replace(/^!/, '').split('|'), st: pat.enForms.startsWith('!') }) : v;
     let t = pat.tail;
     // phrasal verbs take the object before the particle: "earth it up", not "earth up it"
     const m = t === '{o}' && vv.enF[0].match(PARTICLE);
@@ -154,7 +178,15 @@
   /* ---------- Imperative: pronouns follow the verb (donne-le-moi, vas-y, lève-toi) ---------- */
   const IMP_REFL = { tu: 'toi', nous: 'nous', vous: 'vous' };
   // verbs whose imperative isn't used for ordinary commands
-  const IMP_SKIP = new Set('avoir vouloir pouvoir devoir valoir falloir sembler paraître naître mourir pleuvoir neiger geler savoir'.split(' '));
+  const IMP_SKIP = new Set(['avoir', 'vouloir', 'pouvoir', 'devoir', 'valoir', 'falloir', 'sembler', 'paraître', 'naître', 'mourir', 'pleuvoir', 'neiger',
+    'geler', 'savoir', 'être', 'devenir', "s'appeler", 'se sentir', 'appartenir', 'apparaître', 'ressembler', 'plaire', 'demeurer', 'assister', 'se trouver',
+    // things you don't tell someone to do ("Fail!", "Be bored!", "Deserve it!")
+    'arriver', 'échouer', 'se blesser', "s'ennuyer", "s'évanouir", 'ignorer', 'se tromper', 'se perdre', 'divorcer', 'glisser', 'vieillir',
+    'rougir', 'trembler', 'souffrir', 'connaître', 'posséder', 'mériter', 'prévoir', 'désirer', 'douter', 'tomber', 'espérer', 'souhaiter',
+    'craindre', 'intéresser', 'attirer', 'fâcher', 'ennuyer', 'manquer', 'rater', 'recevoir', 'inquiéter', 'briller', 'préférer', 'détester',
+    'entendre', 'adorer']);
+  // single patterns that don't work as commands ("viens-en")
+  const IMP_SKIP_PAT = new Set(['venir:y', 'venir:en', 'revenir:y']);
   const STRONG = { me: 'moi', te: 'toi' };
   function impClitics(spec, pronoun) {
     const out = [];
@@ -180,13 +212,13 @@
   // tu-forms ending in a vowel take an s before y/en: manges-en, vas-y
   const impVerb = (form, pronoun, cl) => (pronoun === 'tu' && (cl[0] === 'y' || cl[0] === 'en') && /[ea]$/.test(form) ? form + 's' : form);
 
-  function buildImperative(v, pronoun, pat, mode) {
+  function buildImperative(v, pronoun, pat, mode, specIn) {
     if (!['tu', 'nous', 'vous'].includes(pronoun)) return null;
     if (/R\+(y|do)|do\+y/.test(pat.type)) return null; // awkward in the imperative
-    if (IMP_SKIP.has(v.inf) || (pat.type === 'S' && v.inf === 'être')) return null;
+    if (IMP_SKIP.has(v.id) || IMP_SKIP_PAT.has(v.id + ':' + pat.type)) return null;
     const p = V.verbPart(v, 'imperatif', pronoun);
     if (!p) return null;
-    const spec = makeSpec(pat, pronoun);
+    const spec = specIn || makeSpec(pat, pronoun, true);
     const cl = impClitics(spec, pronoun);
     if (mode === 'pron' && !cl.length) return null;
     const tail = impTail(cl);
@@ -196,9 +228,7 @@
     if (mode === 'verb') { ans = { blank: forms[0], acceptBlank: forms, acceptFull: fulls, full: fulls[0] }; after = tail ? '-' + tail : ''; }
     else if (mode === 'pron') { ans = { blank: tail, acceptBlank: [tail], acceptFull: fulls, full: fulls[0] }; before = forms[0] + '-'; }
     else ans = { blank: fulls[0], acceptBlank: fulls, acceptFull: fulls, full: fulls[0] };
-    const cueT = fillTail(pat.tail, spec);
-    const cue = pat.type === 'S' ? '' : pat.type.startsWith('R') && !cueT ? 'reflexive' : cueT;
-    return { ans, before, after, english: english(v, 'imperatif', pronoun, spec, pat), cue, spec, pattern: pat, clitics: cl, imp: true,
+    return { ans, before, after, english: english(v, 'imperatif', pronoun, spec, pat), cues: cuesOf(pat, spec), spec, pattern: pat, clitics: cl, imp: true,
       vf: { forms }, mode };
   }
   function impWrong(q, pronoun) {
@@ -212,12 +242,12 @@
 
   /**
    * Build a question. mode: 'verb' (fill in the verb), 'pron' (fill in subject + pronouns), 'both'.
-   * Returns { ans, before, after, english, cue, spec, pattern } or null if the sentence doesn't exist.
+   * Returns { ans, before, after, english, cues, spec, pattern } or null if the sentence doesn't exist.
    */
-  function build(v, tense, pronoun, pat, mode) {
-    if (tense === 'imperatif') return buildImperative(v, pronoun, pat, mode);
+  function build(v, tense, pronoun, pat, mode, specIn) {
+    if (tense === 'imperatif') return buildImperative(v, pronoun, pat, mode, specIn);
     if (pat.type.includes('y') && v.inf === 'aller' && (tense === 'futur' || tense === 'cond')) return null; // j'irai, not j'y irai
-    const spec = makeSpec(pat, pronoun);
+    const spec = specIn || makeSpec(pat, pronoun); // specIn: replaying a missed question
     const vf = verbForms(v, tense, pronoun, spec);
     if (!vf) return null;
     const clitics = cliticsOf(spec, pronoun);
@@ -235,8 +265,7 @@
     } else {
       ans = { blank: full, acceptBlank: fulls, acceptFull: fulls, full };
     }
-    const cue = pat.type === 'S' ? '' : pat.type.startsWith('R') && !fillTail(pat.tail, spec) ? 'reflexive' : fillTail(pat.tail, spec);
-    return { ans, before, after, english: english(v, tense, pronoun, spec, pat), cue, spec, pattern: pat, clitics, vf, mode };
+    return { ans, before, after, english: english(v, tense, pronoun, spec, pat), cues: cuesOf(pat, spec), spec, pattern: pat, clitics, vf, mode };
   }
 
   /* ---------- Multiple-choice wrong answers ---------- */
