@@ -24,3 +24,5 @@ This licence covers the app code and the English glosses, patterns and lists in
 tools/. It does not cover the verb data (data/lefff-verbs.tsv,
 data/lefff-frames.tsv and verbs-data.js), which is derived from the Lefff and distributed under the
 LGPL-LR licence: see data/LICENSE-LGPLLR.txt and README.md.
+Nor does it cover definitions.js (verb meanings and examples from the English Wiktionary),
+which is distributed under CC BY-SA 4.0: see data/WIKTIONARY-NOTICE.txt.

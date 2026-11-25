@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '12';
+  const APP_VERSION = '13';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -253,7 +253,7 @@
   function render() {
     const app = $('#app');
     app.innerHTML = '';
-    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb, guide: viewGuide }[view]());
+    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb, guide: viewGuide, meanings: viewMeanings }[view]());
   }
 
   let toastTimer;
@@ -620,6 +620,7 @@
           </section>
           <p class="foot muted">Your progress is stored only on this device.</p>
           <p class="foot muted credits">Verb conjugations from the <a href="https://pauillac.inria.fr/~sagot/index.html#lefff">Lefff</a> by Benoît Sagot (Inria), used under the <a href="data/LICENSE-LGPLLR.txt">LGPL-LR licence</a>.</p>
+          <p class="foot muted credits">Verb meanings and examples from the <a href="https://en.wiktionary.org/">English Wiktionary</a>, by Wiktionary contributors, via <a href="https://kaikki.org/">Wiktextract</a>, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (reformatted).</p>
           <p class="foot muted credits">App version ${APP_VERSION}</p>
         </div>
       </div>`);
@@ -902,7 +903,7 @@
         </header>
         <div class="content">
           <h1 class="verb-title" lang="fr">${esc(v.id)}</h1>
-          <p class="verb-sub">${esc(V.englishGloss(v))} · ${GROUP_NAME[v.group]} · ${AUX_NAME[v.aux]}</p>
+          <p class="verb-sub">${hasDefs(v) ? `<a href="#" class="def-link" data-act="meanings">${esc(V.englishGloss(v))}</a>` : esc(V.englishGloss(v))} · ${GROUP_NAME[v.group]} · ${AUX_NAME[v.aux]}</p>
           <p class="verb-legend"><span><i class="ldot"></i>learned form</span><span><i class="rdot"></i>reviewed form</span></p>
           ${V.TENSES.map(t => `
             <section class="vt">
@@ -914,6 +915,8 @@
       </div>`);
     $('[data-act="back"]', node).onclick = () => go('list');
     $('[data-act="guide"]', node).onclick = () => openGuide();
+    const ml = $('[data-act="meanings"]', node);
+    if (ml) ml.onclick = e => { e.preventDefault(); verbScroll = window.scrollY; go('meanings'); };
     const star = $('[data-act="star"]', node);
     const setStar = () => {
       const on = isCustom(v.id);
@@ -922,6 +925,60 @@
     };
     setStar();
     star.onclick = () => { const on = toggleCustom(v.id); setStar(); toast(on ? `${v.id} added to Custom` : `${v.id} removed from Custom`); };
+    return node;
+  }
+
+  /* ---------------- Meanings (Wiktionary) ---------------- */
+  // definitions.js is large, so it loads in the background after the app starts
+  let verbScroll = 0, defsState = window.DEFS ? 'ready' : 'idle';
+  function loadDefs() {
+    if (defsState !== 'idle') return;
+    defsState = 'loading';
+    const sc = document.createElement('script');
+    sc.src = 'definitions.js';
+    sc.onload = () => { defsState = window.DEFS ? 'ready' : 'failed'; if (view === 'meanings') render(); };
+    sc.onerror = () => { defsState = 'failed'; if (view === 'meanings') render(); };
+    document.head.appendChild(sc);
+  }
+  const defsOf = v => (window.DEFS && window.DEFS[v.id]) || null;
+  // until the file has loaded, assume there are meanings (all but one verb has some)
+  const hasDefs = v => (defsState === 'ready' ? !!defsOf(v) : defsState !== 'failed');
+  function viewMeanings() {
+    const v = V.BY_ID[verbId];
+    loadDefs();
+    const defs = defsOf(v) || [];
+    const from = (window.DEFS_FROM && window.DEFS_FROM[v.id]) || null;
+    const word = from || v.inf;
+    const wikt = 'https://en.wiktionary.org/wiki/' + encodeURIComponent(word) + '#French';
+    let body;
+    if (defsState === 'loading' || defsState === 'idle') body = '<p class="muted">Loading meanings…</p>';
+    else if (defsState === 'failed') body = '<p class="muted">The meanings file (definitions.js) couldn’t be loaded. Open the app once while online, or check that the file is on your site.</p>';
+    else if (!defs.length) body = '<p class="muted">Wiktionary has no meanings listed for this verb yet.</p>';
+    else body = `
+          ${from ? `<p class="def-note muted">Wiktionary lists no separate meanings for <span lang="fr">${esc(v.id)}</span>, so these are the meanings of <span lang="fr">${esc(from)}</span>.</p>` : ''}
+          <ol class="senses">
+            ${defs.map(([gloss, tags, ex], i) => `
+              <li class="sense">
+                <div class="s-head"><span class="s-num">${i + 1}</span><span class="s-gloss">${esc(gloss)}</span></div>
+                ${tags.length ? `<div class="s-tags">${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
+                ${ex.length ? `<ul class="gd-ex">${ex.map(([fr, en]) => `<li><span class="fr" lang="fr">${esc(fr)}</span>${en ? `<span class="en">${esc(en)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+              </li>`).join('')}
+          </ol>
+          <p class="foot muted credits">Meanings and examples from the <a href="${wikt}" target="_blank" rel="noopener">Wiktionary entry for <span lang="fr">${esc(word)}</span></a>, by Wiktionary contributors, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0 licence</a>. Reformatted for this app.</p>`;
+    const node = el(`
+      <div class="screen page meanings-page">
+        <header class="bar">
+          <button class="icon back-text" data-act="back" aria-label="Back to ${esc(v.id)}">${ICON.back}<span lang="fr">${esc(v.id)}</span></button>
+          <div class="bar-title"></div>
+          <div class="bar-right"></div>
+        </header>
+        <div class="content">
+          <h1 class="verb-title" lang="fr">${esc(v.id)}</h1>
+          <p class="verb-sub">Meanings${defsState === 'ready' ? ` · ${defs.length} ${defs.length === 1 ? 'sense' : 'senses'}` : ''}</p>
+          ${body}
+        </div>
+      </div>`);
+    $('[data-act="back"]', node).onclick = () => { const y = verbScroll; go('verb'); requestAnimationFrame(() => window.scrollTo(0, y)); };
     return node;
   }
 
@@ -1228,4 +1285,5 @@
     return;
   }
   render();
+  setTimeout(loadDefs, 1500); // meanings load quietly once the app is up
 })();

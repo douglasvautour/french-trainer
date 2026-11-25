@@ -297,6 +297,17 @@ button:disabled { cursor: default; }
 .sw-main { cursor: pointer; }
 .verb-title { font-family: var(--serif); font-weight: 700; font-size: 38px; line-height: 1.1; margin: 22px 0 4px; }
 .verb-sub { font-size: 14px; color: var(--ink-2); margin: 0 0 6px; }
+.def-link { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: var(--ink-2); }
+.senses { list-style: none; margin: 22px 0 0; padding: 0; }
+.sense { padding: 18px 0; border-top: 1px solid var(--line); }
+.sense:last-child { border-bottom: 1px solid var(--line); }
+.s-head { display: flex; align-items: baseline; gap: 12px; }
+.s-num { font-family: var(--serif); font-weight: 700; font-size: 18px; color: var(--muted); min-width: 14px; }
+.s-gloss { font-family: var(--serif); font-weight: 700; font-size: 23px; line-height: 1.2; }
+.s-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px 26px; }
+.s-tags span { font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-2); background: var(--soft); border-radius: 6px; padding: 3px 7px; }
+.sense .gd-ex { margin-left: 26px; }
+.def-note { font-size: 14px; margin: 14px 0 0; }
 .verb-legend { font-size: 12px; color: var(--muted); margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
 .ldot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; flex: none; }
 .verb-legend .ldot, .verb-legend .rdot { margin: 0 6px 0 0; }

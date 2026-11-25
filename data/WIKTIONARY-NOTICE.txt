@@ -1,0 +1,20 @@
+Verb meanings and example sentences in definitions.js
+
+Source: the English Wiktionary, https://en.wiktionary.org
+Authors: Wiktionary contributors (see each entry's page history on Wiktionary)
+Licence: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+         https://creativecommons.org/licenses/by-sa/4.0/
+         Full legal text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+Extraction: Wiktextract / kaikki.org (https://kaikki.org), Tatu Ylonen,
+            "Wiktextract: Wiktionary as Machine-Readable Structured Data", LREC 2022.
+
+Changes made for this app: only the verb senses of each infinitive in the app's verb list are kept;
+usage labels (transitive, figurative, ...) come from each sense's qualifiers; at most three short
+example sentences are kept per sense, with their English translations; long or untranslated
+quotations are left out; for 11 reflexive verbs with no reflexive sense on Wiktionary, the base
+verb's meanings are shown. The wording of meanings and examples is unchanged.
+
+definitions.js is a modified version of the Wiktionary material and is shared under the same licence,
+CC BY-SA 4.0. It is provided as is, without warranties. This licence covers definitions.js only;
+the app's code is under the MIT License (see LICENSE), and the conjugation data is under the LGPL-LR
+(see data/LICENSE-LGPLLR.txt).
