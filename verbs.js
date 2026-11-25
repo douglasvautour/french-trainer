@@ -187,7 +187,9 @@
   const EN_SELF = { je: ['myself', 'my'], tu: ['yourself', 'your'], il: ['himself', 'his'], elle: ['herself', 'her'], on: ['oneself', "one's"],
     nous: ['ourselves', 'our'], vous: ['yourselves', 'your'], ils: ['themselves', 'their'], elles: ['themselves', 'their'] };
   function english(v, tense, pronoun) {
-    const [base, s3, past, pp, ing] = v.enF;
+    // an override ending in "…" ("be called…") needs more after the verb
+    const ell = v.enF[0].endsWith('…');
+    const [base, s3, past, pp, ing] = v.enF.map(x => x.replace(/…$/, ''));
     const third = pronoun === 'il' || pronoun === 'elle' || pronoun === 'on';
     const wasP = pronoun === 'je' || third;
     const head = base.split(' ')[0], rest = base.slice(head.length);
@@ -209,7 +211,7 @@
       case 'subj': case 'imperatif': vp = base; break;
     }
     vp = vp.replace(/\boneself\b/g, EN_SELF[pronoun][0]).replace(/\bone's\b/g, EN_SELF[pronoun][1]);
-    const end = / to$/.test(vp) ? '…' : '.';
+    const end = ell || / to$/.test(vp) ? '…' : '.';
     forms(v);
     const subj = v.impersonal && pronoun === 'il' ? 'it' : EN_SUBJ[pronoun];
     if (tense === 'subj') return '…that ' + subj + ' ' + vp + end;

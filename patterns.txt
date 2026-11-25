@@ -40,7 +40,7 @@ atteindre: do:t
 attendre: S; do:tp=for {o}
 attirer: do:tp
 attraper: do:tp
-augmenter: S; do:t
+augmenter: do:t
 avancer: S
 avoir: do:t; en=some
 baisser: do:t
@@ -52,7 +52,7 @@ boire: S; do:t; en=some
 bouger: S
 briller: S
 brosser: do:t
-brûler: S; do:t
+brûler: do:t
 bâtir: do:t
 cacher: do:t; do+io={o} from {i}
 casser: do:t
@@ -98,13 +98,13 @@ cuire: S; do:t
 cuisiner: S; do:t
 céder: S; do+io=({o} over to {i})>hand|hands|handed|handed|handing
 danser: S
-demander: do:t; do+io=({i} for {o})>ask|asks|asked|asked|asking
-demeurer: S; y=there
+demander: do:t=(for {o}); do+io=({i} for {o})>ask|asks|asked|asked|asking
+demeurer: y=there
 descendre: S; do:t=({o} down)>take|takes|took|taken|taking
 dessiner: S; do:t
-devenir: S
+devenir: S=>become…|becomes…|became…|become…|becoming…
 deviner: do:t
-devoir: do+io=({o} to {i})>owe|owes|owed|owed|owing
+devoir: S; do+io=({o} to {i})>owe|owes|owed|owed|owing
 dire: do:t; do+io={o} to {i}
 diriger: do:tp
 discuter: S; en=it>discuss|discusses|discussed|discussed|discussing
@@ -116,7 +116,7 @@ dormir: S
 doubler: do:t
 douter: S; en=it
 durer: -
-décider: S; do:t
+décider: S
 découvrir: do:t
 décrire: do:t; do+io={o} to {i}
 défendre: do:p
@@ -133,7 +133,7 @@ dîner: S
 effacer: do:t
 embrasser: do:p
 emmener: do:p; do+y:p=({o} there)>take|takes|took|taken|taking
-employer: do:tp
+employer: do:t; do:p=({o})>employ|employs|employed|employed|employing
 emporter: do:t=({o} away)>take|takes|took|taken|taking
 emprunter: do:t; do+io={o} from {i}
 empêcher: do:p=({o})>stop|stops|stopped|stopped|stopping
@@ -147,7 +147,7 @@ entraîner: do:p
 entrer: S
 entretenir: do:t
 envoyer: do:t; do+io={o} to {i}
-espérer: do:t
+espérer: do:t=(for {o})
 essayer: do:t
 essuyer: do:t
 exiger: do:t
@@ -160,7 +160,7 @@ fermer: do:t
 finir: S; do:t
 fixer: do:tp=({o})>stare at|stares at|stared at|stared at|staring at
 fonctionner: -
-fondre: S
+fondre: -
 frapper: do:p
 fuir: S
 fâcher: do:p
@@ -168,12 +168,12 @@ fêter: do:t
 gagner: S; do:t
 garder: do:t
 garer: do:t
-geler: S
+geler: -
 glisser: S
 goûter: do:t
 grandir: S
 grimper: S
-guérir: S; do:p
+guérir: S=>get better|gets better|got better|got better|getting better; do:p
 gêner: do:p
 habiller: do:p
 habiter: y=there
@@ -232,14 +232,14 @@ organiser: do:t
 oser: S
 oublier: do:tp
 ouvrir: do:t
-paraître: -
+paraître: S=>!seem…|seems…|seemed…|seemed…|seeming…
 parcourir: do:t
 pardonner: io=({i})>forgive|forgives|forgave|forgiven|forgiving
 parler: S; io=to {i}; en=about it; io+en=to {i} about it
 partager: do:t
 participer: y=in it
 partir: S
-passer: S; do:t; do+io={o} to {i}
+passer: S=>stop by|stops by|stopped by|stopped by|stopping by; do:t; do+io={o} to {i}
 patiner: S
 payer: S; do:tp
 peindre: S; do:t
@@ -258,7 +258,7 @@ porter: do:t
 poser: do:t=({o} down)>put|puts|put|put|putting
 posséder: do:t
 pousser: do:tp
-pouvoir: -
+pouvoir: S
 pratiquer: do:t
 prendre: do:t; en=some; do+io={o} from {i}
 prier: S
@@ -267,7 +267,7 @@ profiter: en=it>enjoy|enjoys|enjoyed|enjoyed|enjoying
 promener: do:p=({o} for a walk)>take|takes|took|taken|taking
 promettre: do:t; do+io={o} to {i}
 prononcer: do:t
-proposer: do:t=({o} down)>put|puts|put|put|putting
+proposer: do:t=({o})>suggest|suggests|suggested|suggested|suggesting; do+io=({o} to {i})>suggest|suggests|suggested|suggested|suggesting
 protéger: do:tp
 prouver: do:t
 préférer: do:tp
@@ -286,7 +286,7 @@ recommencer: S; do:t
 reconnaître: do:tp
 refuser: do:t; do+io={o} to {i}
 regarder: S; do:tp
-regretter: do:tp
+regretter: do:t
 rejoindre: do:p
 relire: do:t
 remarquer: do:tp
@@ -310,7 +310,7 @@ revenir: S; y=there; en=from there
 rire: S
 risquer: do:t
 rougir: S
-rouler: S
+rouler: S=>drive|drives|drove|driven|driving
 réduire: do:t
 réfléchir: S; y=about it
 réparer: do:t
@@ -320,7 +320,7 @@ réussir: S; do:t=({o})>pass|passes|passed|passed|passing
 réveiller: do:p=({o} up)>wake|wakes|woke|woken|waking
 rêver: S
 s'amuser: R
-s'appeler: -
+s'appeler: R=>!be called…|is called…|was called…|been called…|being called…
 s'arrêter: R
 s'asseoir: R
 s'endormir: R
@@ -347,7 +347,7 @@ se cacher: R
 se coiffer: R
 se coucher: R
 se demander: R
-se diriger: R
+se diriger: R+y=there
 se disputer: R
 se doucher: R
 se dépêcher: R
@@ -367,19 +367,19 @@ se promener: R
 se préparer: R
 se rappeler: R; R+do={o}
 se raser: R
-se rencontrer: R
+se rencontrer: -
 se rendre: R+y=there
 se reposer: R
 se réveiller: R
 se sauver: R
-se sentir: -
-se servir: R; R+en=to some
+se sentir: R=>!feel…|feels…|felt…|felt…|feeling…
+se servir: R; R+en=(it)>use|uses|used|used|using
 se souvenir: R; R+en=it
 se taire: R
 se tromper: R
 se trouver: R+y=there
-sembler: -
-sentir: S; do:t
+sembler: S=>!seem…|seems…|seemed…|seemed…|seeming…
+sentir: do:t
 serrer: do:t
 servir: do:t; do+io={o} to {i}; io+en={i} some
 siffler: S
@@ -389,14 +389,14 @@ soigner: do:p
 sonner: S
 sortir: S; en=(of there)>get out|gets out|got out|gotten out|getting out
 souffrir: S
-souhaiter: do:t; do+io={o} for {i}
+souhaiter: do:t=(for {o}); do+io={o} for {i}
 soulever: do:t
 sourire: S; io=at {i}
 soutenir: do:p
 suffire: -
 suivre: do:tp
 supporter: do:p=(with {o})>put up|puts up|put up|put up|putting up
-supposer: do:t
+supposer: -
 surprendre: do:p
 surveiller: do:tp
 survivre: S
@@ -413,7 +413,7 @@ tousser: S
 traduire: do:t
 travailler: S
 traverser: do:t
-traîner: S
+traîner: S=>hang around|hangs around|hung around|hung around|hanging around
 trembler: S
 tromper: do:p
 trouver: do:tp
@@ -434,15 +434,17 @@ vouloir: do:t; en=some
 voyager: S
 vérifier: do:t
 échanger: do:t
-échapper: S
+échapper: -
 échouer: S
-éclater: S
+éclater: -
 économiser: do:t
-écouter: S; do:tp
+écouter: S=>listen|listens|listened|listened|listening; do:tp
 écrire: S; do:t; io=to {i}; do+io={o} to {i}
 élever: do:p
 éteindre: do:t=({o} off)>turn|turns|turned|turned|turning
 étonner: do:p
 étudier: S; do:t
 éviter: do:tp
-être: S
+être: S=>!be…|is…|was…|been…|being…; y=there
+
+tâcher: -
