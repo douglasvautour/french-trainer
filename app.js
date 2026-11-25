@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '13';
+  const APP_VERSION = '14';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -349,7 +349,7 @@
     const tagged = (t, en) => `<span class="cue"><abbr class="ptag${en ? '' : ' solo'}" title="${t}">${SHORT[t] || t}</abbr>${en ? esc(en) : ''}</span>`;
     if (imp && q.form === 'fr') hintParts.push(`<span class="cue">${esc({ tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun])}</span>`);
     else if (askPron) hintParts.push(tagged('subject', V.englishSubject(q.pronoun, q.verb)));
-    hintParts.push(`<span lang="fr">${esc(q.verb.id)}</span>`);
+    hintParts.push(`<span lang="fr" class="q-inf">${esc(q.verb.id)}</span>`);
     if (askPron) q.cues.forEach(c => hintParts.push(tagged(c.t, c.en)));
     qa.innerHTML = `
       <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : 'Fill in the blank'}</div>
@@ -368,7 +368,16 @@
 
     const isLast = quiz.i >= quiz.qs.length - 1;
     const nextLabel = isLast ? 'Finish' : 'Next';
-    const finishQ = ok => { quiz.state = 'answered'; quiz.lastOk = ok; quiz.results.push({ q, ok }); record(q, ok); $('.pbar div', node).style.width = (quiz.results.length / quiz.qs.length) * 100 + '%'; };
+    // once answered, the infinitive under the question opens the verb's conjugations; Back returns to the quiz
+    const linkVerb = () => {
+      const s = $('.q-inf', qa); if (!s || s.tagName === 'A') return;
+      const a = document.createElement('a');
+      a.href = '#'; a.className = 'q-inf def-link'; a.lang = 'fr'; a.textContent = q.verb.id;
+      a.onclick = e => { e.preventDefault(); verbId = q.verb.id; verbFrom = 'quiz'; go('verb'); };
+      s.replaceWith(a);
+    };
+    if (quiz.state === 'answered') linkVerb();
+    const finishQ = ok => { quiz.state = 'answered'; quiz.lastOk = ok; quiz.results.push({ q, ok }); record(q, ok); $('.pbar div', node).style.width = (quiz.results.length / quiz.qs.length) * 100 + '%'; linkVerb(); };
 
     if (q.kind === 'fill') {
       aa.innerHTML = `
@@ -819,7 +828,7 @@
       } else li.classList.add('fixed');
       $('.sw-main', li).addEventListener('click', e => {
         if (e.target.closest('.sw-inline') || li.classList.contains('open') || !V.BY_ID[it.verb]) return;
-        verbId = it.verb; go('verb');
+        verbId = it.verb; verbFrom = 'list'; go('verb');
       });
       return li;
     };
@@ -867,7 +876,7 @@
   const AUX_NAME = { a: 'avoir', e: 'être', E: 'être or avoir' };
   function viewVerb() {
     const v = V.BY_ID[verbId];
-    const backLabel = SOURCES[listKey] ? SOURCES[listKey].label : 'Back';
+    const backLabel = verbFrom === 'quiz' ? 'Quiz' : SOURCES[listKey] ? SOURCES[listKey].label : 'Back';
     const slotLabel = ['je', 'tu', 'il/elle/on', 'nous', 'vous', 'ils/elles'];
     const dotFor = (tense, slot) => {
       const f = data.forms[V.formKey(v.id, tense, slot)];
@@ -913,7 +922,7 @@
             </section>`).join('')}
         </div>
       </div>`);
-    $('[data-act="back"]', node).onclick = () => go('list');
+    $('[data-act="back"]', node).onclick = () => go(verbFrom);
     $('[data-act="guide"]', node).onclick = () => openGuide();
     const ml = $('[data-act="meanings"]', node);
     if (ml) ml.onclick = e => { e.preventDefault(); verbScroll = window.scrollY; go('meanings'); };
@@ -930,7 +939,7 @@
 
   /* ---------------- Meanings (Wiktionary) ---------------- */
   // definitions.js is large, so it loads in the background after the app starts
-  let verbScroll = 0, defsState = window.DEFS ? 'ready' : 'idle';
+  let verbFrom = 'list', verbScroll = 0, defsState = window.DEFS ? 'ready' : 'idle';
   function loadDefs() {
     if (defsState !== 'idle') return;
     defsState = 'loading';
