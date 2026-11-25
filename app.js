@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '11';
+  const APP_VERSION = '10';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -133,7 +133,7 @@
     const b = S.build(v, c.tense, c.pronoun, pat, mode);
     if (!b) return null; // form doesn't exist (e.g. "je faut")
     const q = { verb: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms), mode,
-      ans: b.ans, before: b.before, after: b.after, english: b.english, cues: b.cues || [] };
+      ans: b.ans, before: b.before, after: b.after, english: b.english, cue: b.cue };
     if (q.kind === 'mc') {
       const opts = [b.ans.blank].concat(S.options(b, v, c.tense, c.pronoun));
       if (opts.length < 3) q.kind = 'fill';
@@ -319,18 +319,15 @@
     // Question
     const tl = V.TENSE_LABEL[q.tense];
     const blankHtml = `<span class="blank"><span class="blank-fill"></span></span>`;
-    const scaffold = (q.before ? esc(cap(q.before)) + (/['-]$/.test(q.before) ? '' : ' ') : '') + blankHtml + (q.after ? (q.after.startsWith('-') ? '' : '<span class="after-sp"> </span>') + esc(q.after) : '');
+    const scaffold = (q.before ? esc(cap(q.before)) + (/['-]$/.test(q.before) ? '' : ' ') : '') + blankHtml + (q.after ? (q.after.startsWith('-') ? '' : ' ') + esc(q.after) : '');
     const sentence = q.form === 'fr' ? scaffold : esc(q.english);
     // subtitle: English subject (when you type it) • infinitive • English for the other pronouns (when you type them)
     const askPron = q.form === 'fr' && q.mode !== 'verb';
     const imp = q.tense === 'imperatif';
     const hintParts = [];
-    // each pronoun to type gets its own item, labelled with its type: SUBJECT I • donner • DIRECT it (m.) • INDIRECT to him
-    const tagged = (t, en) => `<span class="cue"><span class="ptag${en ? '' : ' solo'}">${t}</span>${en ? esc(en) : ''}</span>`;
-    if (imp && q.form === 'fr') hintParts.push(`<span class="cue">${esc({ tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun])}</span>`);
-    else if (askPron) hintParts.push(tagged('subject', V.englishSubject(q.pronoun, q.verb)));
+    if (askPron || (imp && q.form === 'fr')) hintParts.push(`<span class="cue">${esc(imp ? { tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun] : V.englishSubject(q.pronoun, q.verb))}</span>`);
     hintParts.push(`<span lang="fr">${esc(q.verb.id)}</span>`);
-    if (askPron) q.cues.forEach(c => hintParts.push(tagged(c.t, c.en)));
+    if (askPron && q.cue) hintParts.push(`<span class="cue">${esc(q.cue)}</span>`);
     qa.innerHTML = `
       <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : 'Fill in the blank'}</div>
       <p class="q-tense" lang="fr" style="color:${TENSE_COLOR[q.tense]}">${esc(tl)}</p>
@@ -340,10 +337,7 @@
       <p class="q-hint">${hintParts.join('<span class="sep" aria-hidden="true">•</span>')}${q.form === 'en' ? `<span class="how">${q.kind === 'mc' ? ICON.tap : ICON.write}Answer in French</span>` : ''}</p>`;
     const fillBlank = (txt, ok) => {
       const b = $('.blank-fill', qa); if (!b) return;
-      b.textContent = q.before ? txt : cap(txt); // the blank starts the sentence: capital letter
-      const sp = b.parentElement.nextElementSibling; // no space after an apostrophe: "Vous l'avez"
-      if (sp && sp.classList.contains('after-sp') && /'$/.test(txt)) sp.remove();
-      b.parentElement.classList.add('filled', ok ? 'good' : 'bad');
+      b.textContent = txt; b.parentElement.classList.add('filled', ok ? 'good' : 'bad');
     };
 
     const isLast = quiz.i >= quiz.qs.length - 1;
