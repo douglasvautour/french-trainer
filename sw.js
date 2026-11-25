@@ -1,5 +1,5 @@
 /* Offline support: cache the app shell, and Google Fonts once they've loaded. */
-const VERSION = 'apprenez-v11';
+const VERSION = 'apprenez-v12';
 const SHELL = [
   './', 'index.html', 'app.js', 'verbs.js', 'verbs-data.js', 'sentences.js', 'guide.js', 'manifest.webmanifest',
   'fonts/montserrat-400.woff', 'fonts/montserrat-600.woff', 'fonts/crimson-400.woff', 'fonts/crimson-700.woff',

@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '11';
+  const APP_VERSION = '12';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -25,9 +25,9 @@
     objPron: { do: true, io: true, refl: true, y: true, en: true },
     pronouns: Object.fromEntries(V.PRONOUNS.map(p => [p, true])),
     tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
-    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false },
+    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false },
   });
-  const EMPTY_DATA = () => ({ custom: [], excluded: [], forms: {}, events: [] });
+  const EMPTY_DATA = () => ({ custom: [], excluded: [], forms: {}, events: [], missed: {} });
   function merge(def, val) {
     if (!val || typeof val !== 'object') return def;
     for (const k in def) {
@@ -78,9 +78,14 @@
     f.seen++; f.last = now; f.type = q.kind; f.answer = q.ans.full;
     if (ok) { f.correct++; f.streak++; if (f.streak >= 5 && !f.learnedAt) f.learnedAt = now; }
     else { f.wrong++; f.streak = 0; f.learnedAt = null; }
-    data.events.push({ t: now, k, ok: ok ? 1 : 0, ty: q.kind });
+    data.events.push({ t: now, k, ok: ok ? 1 : 0, ty: q.kind, tn: q.tense });
+    // Incorrect Answers: the exact phrase is kept until it's answered correctly
+    const mk = [q.verb.id, q.tense, q.pronoun, q.ans.full].join('|');
+    if (ok) delete data.missed[mk];
+    else data.missed[mk] = { v: q.verb.id, t: q.tense, p: q.pronoun, pi: q.patIndex, pt: q.patType, spec: q.spec, mode: q.mode, full: q.ans.full, en: q.english, at: now };
     saveData();
   }
+  const missedKeys = () => Object.keys(data.missed).filter(k => V.BY_ID[data.missed[k].v]).sort((a, b) => data.missed[b].at - data.missed[a].at);
   const isCustom = id => data.custom.includes(id);
   data.excluded = []; // excluding verbs from lists was removed; nothing stays hidden
   const groupIds = key => V.VERBS.filter(v => (key === 'common' ? v.common : v.group === +key.slice(1))).map(v => v.id);
@@ -108,6 +113,8 @@
     });
     if (src.review) addForms(reviewKeys());
     if (src.learned) addForms(learnedKeys());
+    // missed phrases come back exactly as they were asked, whatever the tense and pronoun settings
+    if (src.incorrect) missedKeys().forEach(k => { const m = data.missed[k]; forms.push({ id: m.v, tense: m.t, pronoun: m.p, miss: k }); });
     const A = verbs.length * T.length * P.length;
     return {
       size: A + forms.length,
@@ -125,15 +132,26 @@
     const v = V.BY_ID[c.id];
     const af = settings.answerForms;
     // sentence patterns this verb allows, limited to the pronoun types switched on
-    let pats = S.parse(v.pats).filter(p => p.cats.every(k => settings.objPron[k]));
-    if (!af.verb) pats = pats.filter(p => p.type !== 'S');
-    if (!pats.length) return null;
-    const pat = pick(pats);
-    const mode = af.verb && af.pron ? pick(pat.type === 'S' ? ['verb', 'both'] : ['verb', 'pron', 'both']) : af.verb ? 'verb' : 'pron';
-    const b = S.build(v, c.tense, c.pronoun, pat, mode);
+    const all = S.parse(v.pats);
+    let pat, mode, spec;
+    const m = c.miss && data.missed[c.miss];
+    if (m) {
+      // replay a missed phrase: same pattern, same pronouns, same thing to fill in
+      pat = all[m.pi] && all[m.pi].type === m.pt ? all[m.pi] : all.find(p => p.type === m.pt);
+      if (!pat) { delete data.missed[c.miss]; saveData(); return null; }
+      mode = m.mode; spec = m.spec;
+    } else {
+      let pats = all.filter(p => p.cats.every(k => settings.objPron[k]));
+      if (!af.verb) pats = pats.filter(p => p.type !== 'S');
+      if (!pats.length) return null;
+      pat = pick(pats);
+      mode = af.verb && af.pron ? pick(pat.type === 'S' ? ['verb', 'both'] : ['verb', 'pron', 'both']) : af.verb ? 'verb' : 'pron';
+    }
+    const b = S.build(v, c.tense, c.pronoun, pat, mode, spec);
     if (!b) return null; // form doesn't exist (e.g. "je faut")
     const q = { verb: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms), mode,
-      ans: b.ans, before: b.before, after: b.after, english: b.english, cues: b.cues || [] };
+      ans: b.ans, before: b.before, after: b.after, english: b.english, cues: b.cues || [],
+      spec: b.spec, patIndex: all.indexOf(pat), patType: pat.type };
     if (q.kind === 'mc') {
       const opts = [b.ans.blank].concat(S.options(b, v, c.tense, c.pronoun));
       if (opts.length < 3) q.kind = 'fill';
@@ -162,7 +180,7 @@
     const out = [], used = new Set();
     for (let tries = 0; out.length < n && tries < n * 60; tries++) {
       const c = pool.draw();
-      const k = c.id + '|' + c.tense + '|' + c.pronoun;
+      const k = c.miss || c.id + '|' + c.tense + '|' + c.pronoun;
       if (used.has(k) && used.size < Math.min(pool.size, n)) continue; // avoid repeats when we can
       const q = makeQuestion(c);
       if (!q) continue;
@@ -171,6 +189,7 @@
     return out;
   }
 
+  const MISSED_NOTE = 'Check Incorrect Answers to try again!';
   let quiz = null;
   const sigOf = () => JSON.stringify(settings);
   const NO_MATCH = 'No verbs match your Study Content selection yet. Open Settings to choose what to study.';
@@ -326,7 +345,8 @@
     const imp = q.tense === 'imperatif';
     const hintParts = [];
     // each pronoun to type gets its own item, labelled with its type: SUBJECT I • donner • DIRECT it (m.) • INDIRECT to him
-    const tagged = (t, en) => `<span class="cue"><span class="ptag${en ? '' : ' solo'}">${t}</span>${en ? esc(en) : ''}</span>`;
+    const SHORT = { subject: 'subj', direct: 'dir', indirect: 'ind', reflexive: 'refl', adverbial: 'adv' };
+    const tagged = (t, en) => `<span class="cue"><abbr class="ptag${en ? '' : ' solo'}" title="${t}">${SHORT[t] || t}</abbr>${en ? esc(en) : ''}</span>`;
     if (imp && q.form === 'fr') hintParts.push(`<span class="cue">${esc({ tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun])}</span>`);
     else if (askPron) hintParts.push(tagged('subject', V.englishSubject(q.pronoun, q.verb)));
     hintParts.push(`<span lang="fr">${esc(q.verb.id)}</span>`);
@@ -392,11 +412,11 @@
         } else if (quiz.tries >= 3) {
           input.value = quiz.draft = q.ans.blank;
           input.classList.add('revealed');
-          setMsg(r === 'accent' ? 'Check your accents.' : r === 'hyphen' ? 'Check your hyphens.' : 'Not quite.', 'bad', 'The correct answer is shown above.');
+          setMsg(r === 'accent' ? 'Don’t forget to check your accents.' : r === 'hyphen' ? 'Check your hyphens.' : 'Not quite.', 'bad', MISSED_NOTE);
           fillBlank(q.ans.blank, false); finishQ(false); done();
         } else {
           const left = 3 - quiz.tries;
-          setMsg(r === 'accent' ? 'Check your accents.' : r === 'hyphen' ? 'Check your hyphens.' : 'Try again.', 'warn', `${left} ${left === 1 ? 'try' : 'tries'} left`);
+          setMsg(r === 'accent' ? 'Don’t forget to check your accents.' : r === 'hyphen' ? 'Check your hyphens.' : 'Try again.', 'warn', `${left} ${left === 1 ? 'try' : 'tries'} left`);
           input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
           input.focus();
         }
@@ -409,7 +429,7 @@
       input.value = quiz.draft || '';
       if (quiz.state === 'answered') {
         if (quiz.lastOk) { setMsg('Correct!', 'good'); input.classList.add('good'); }
-        else { input.classList.add('revealed'); setMsg('Not quite.', 'bad', 'The correct answer is shown above.'); }
+        else { input.classList.add('revealed'); setMsg('Not quite.', 'bad', MISSED_NOTE); }
         fillBlank(q.ans.blank, quiz.lastOk); done();
       } else if (quiz.tries > 0) {
         const left = 3 - quiz.tries;
@@ -433,6 +453,7 @@
         if (!ok) { b.classList.add('wrong'); $('.mark', b).innerHTML = ICON.cross; }
         msg.className = 'msg show ' + (ok ? 'good' : 'bad');
         $('.msg-main', msg).textContent = ok ? 'Correct!' : 'Not quite.';
+        $('.msg-sub', msg).textContent = ok ? '' : MISSED_NOTE;
         fillBlank(q.ans.blank, ok);
         if (isNew) { quiz.picked = i; finishQ(ok); }
         nextBtn.classList.remove('hidden');
@@ -491,11 +512,13 @@
     custom: { label: 'Custom', sub: 'verbs you starred', action: 'Remove' },
     review: { label: 'In Review', sub: 'forms you’ve been quizzed on', action: 'Remove' },
     learned: { label: 'Learned', sub: 'answered correctly 5 times in a row', action: 'Remove' },
+    incorrect: { label: 'Incorrect Answers', sub: 'phrases you missed, until you get them right', action: 'Remove' },
   };
   function sourceCount(key) {
     if (key === 'custom') return data.custom.length;
     if (key === 'review') return reviewKeys().length;
     if (key === 'learned') return learnedKeys().length;
+    if (key === 'incorrect') return missedKeys().length;
     return groupIds(key).length;
   }
 
@@ -592,7 +615,7 @@
 
           <section class="group danger-zone">
             <h2>Delete Data</h2>
-            <p class="muted">Removes all of your results, your In Review and Learned lists, and your Custom verbs. Your settings and the verb lists themselves are kept.</p>
+            <p class="muted">Removes all of your results, your In Review, Learned and Incorrect Answers lists, and your Custom verbs. Your settings and the verb lists themselves are kept.</p>
             <button class="btn danger" data-act="delete">Delete Data</button>
           </section>
           <p class="foot muted">Your progress is stored only on this device.</p>
@@ -615,7 +638,7 @@
       $$('input[type=checkbox]', set).forEach(inp => inp.onchange = () => { s[key][inp.dataset.id] = inp.checked; saveSettings(); warn(); });
     });
     warn();
-    $$('[data-list]', node).forEach(b => b.onclick = () => { listKey = b.dataset.list; listSearch = ''; go('list'); });
+    $$('[data-list]', node).forEach(b => b.onclick = () => { listKey = b.dataset.list; listSearch = ''; listFrom = 'settings'; go('list'); });
     $('[data-act="backup"]', node).onclick = saveBackup;
     const fileIn = $('#restore-file', node);
     $('[data-act="restore"]', node).onclick = () => fileIn.click();
@@ -707,7 +730,7 @@
   }
 
   /* ---------------- Verb list pages ---------------- */
-  let listKey = 'common', listSearch = '', settingsScroll = 0;
+  let listKey = 'common', listSearch = '', settingsScroll = 0, listFrom = 'settings';
   let listRestore = null, listShown = 0, verbId = null;
   const CHUNK = 80;
 
@@ -731,6 +754,11 @@
           right: listKey === 'review' ? dots(f.streak) : '', match: p.id,
         };
       });
+    } else if (listKey === 'incorrect') {
+      items = missedKeys().map(k => {
+        const m = data.missed[k];
+        return { key: k, verb: m.v, title: cap(m.full), fr: true, sub: `${m.en} · ${V.TENSE_LABEL[m.t] || m.t}`, match: m.v };
+      });
     } else if (listKey === 'custom') {
       items = data.custom.map(verbItem).filter(Boolean);
     } else {
@@ -748,7 +776,7 @@
     const node = el(`
       <div class="screen page list-page">
         <header class="bar">
-          <button class="icon back-text" data-act="back" aria-label="Back to Settings">${ICON.back}<span>Settings</span></button>
+          <button class="icon back-text" data-act="back" aria-label="Back to ${listFrom === 'progress' ? 'Progress' : 'Settings'}">${ICON.back}<span>${listFrom === 'progress' ? 'Progress' : 'Settings'}</span></button>
           <div class="bar-title">${esc(src.label)}</div>
           <div class="bar-right">${canRemove ? '<button class="text-btn" data-act="edit">Edit</button>' : ''}</div>
         </header>
@@ -816,7 +844,7 @@
       io.observe(sentinel);
     } else { while (shown < items.length) renderMore(); }
 
-    $('[data-act="back"]', node).onclick = () => go('settings');
+    $('[data-act="back"]', node).onclick = () => go(listFrom);
     const editBtn = $('[data-act="edit"]', node);
     if (editBtn) editBtn.onclick = () => { const on = ul.classList.toggle('editing'); editBtn.textContent = on ? 'Done' : 'Edit'; closeOpenRow(); };
     const search = $('input[type=search]', node);
@@ -832,7 +860,7 @@
     return node;
   }
 
-  const noun = n => (listKey === 'review' || listKey === 'learned' ? (n === 1 ? 'form' : 'forms') : (n === 1 ? 'verb' : 'verbs'));
+  const noun = n => (listKey === 'incorrect' ? (n === 1 ? 'phrase' : 'phrases') : listKey === 'review' || listKey === 'learned' ? (n === 1 ? 'form' : 'forms') : (n === 1 ? 'verb' : 'verbs'));
   /* ---------------- Verb page ---------------- */
   const GROUP_NAME = { 1: 'first group', 2: 'second group', 3: 'third group' };
   const AUX_NAME = { a: 'avoir', e: 'être', E: 'être or avoir' };
@@ -902,6 +930,7 @@
       custom: 'Tap the star on a quiz question or verb page to add the verb here.',
       review: 'Forms appear here after you answer them in a quiz.',
       learned: 'Nothing learned yet. Answer a form correctly five times in a row to learn it.',
+      incorrect: 'Nothing here. Questions you miss appear here, and leave once you answer them correctly.',
     }[key] || 'No verbs in this list.';
   }
   function undoMessage(it) { return `Removed ${it.title} from Custom`; }
@@ -1010,8 +1039,104 @@
       review: reviewKeys().length, learned: learnedKeys().length,
     };
   }
+  /* Charts: plain SVG, sized by viewBox so they fill the column */
+  const CORRECT_C = '#4f9f6f', WRONG_C = '#9e2f25'; // checked for colour-blind separation
+  const dayStart = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const addDays = (t, n) => { const d = new Date(t); d.setDate(d.getDate() + n); return d.getTime(); };
+  const weekStart = t => { const d = new Date(dayStart(t)); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+  const monthStart = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
+  const fmtDay = (t, o) => new Date(t).toLocaleDateString(undefined, o || { day: 'numeric', month: 'short' });
+  function niceMax(m) {
+    if (m <= 4) return 4;
+    const p = Math.pow(10, Math.floor(Math.log10(m))), f = m / p;
+    return [1.2, 1.6, 2, 3, 4, 5, 6, 8, 10].find(x => f <= x) * p; // the top is a round number with a round half
+  }
+  const TENSE_SHORT = { present: 'présent', pc: 'p. composé', imparfait: 'imparfait', futur: 'futur', cond: 'conditionnel', pqp: 'p.-q.-parfait',
+    fa: 'f. antérieur', subj: 'subjonctif', cp: 'cond. passé', ps: 'p. simple', imperatif: 'impératif' };
+  // time buckets for the daily chart: days (up to 60), else weeks (up to two years), else months
+  function timeBuckets(ev) {
+    const today = dayStart(Date.now());
+    let unit = 'day', first = range === '30' ? addDays(today, -29) : (ev.length ? dayStart(Math.min(...ev.map(e => e.t))) : today);
+    if (range !== '30') first = Math.min(first, addDays(today, -6)); // at least a week wide
+    const spanDays = Math.round((today - first) / DAY) + 1;
+    if (range !== '30' && spanDays > 730) unit = 'month';
+    else if (range !== '30' && spanDays > 60) unit = 'week';
+    const startOf = unit === 'day' ? dayStart : unit === 'week' ? weekStart : monthStart;
+    const next = t => (unit === 'month' ? new Date(new Date(t).getFullYear(), new Date(t).getMonth() + 1, 1).getTime() : addDays(t, unit === 'week' ? 7 : 1));
+    const buckets = [];
+    for (let t = startOf(first); t <= today; t = next(t)) buckets.push({ t, ok: 0, bad: 0 });
+    const idx = new Map(buckets.map((b, i) => [b.t, i]));
+    ev.forEach(e => { const i = idx.get(startOf(e.t)); if (i !== undefined) buckets[i][e.ok ? 'ok' : 'bad']++; });
+    return { buckets, unit };
+  }
+  // A vertical bar chart. bars: [{ segs: [{ v, c }] (bottom first), label, tip, value? }]
+  function barChart(bars, { xLabel = (b, i) => '', rotate = false, values = false, h = 190 } = {}) {
+    const W = 340, padL = 34, padR = 6, padT = values ? 18 : 10, padB = rotate ? 74 : 24;
+    const plotW = W - padL - padR, plotH = h - padT - padB;
+    const max = niceMax(Math.max(1, ...bars.map(b => b.segs.reduce((a, x) => a + x.v, 0))));
+    const step = plotW / bars.length, bw = Math.max(2, Math.min(22, step * 0.68));
+    const y = v => padT + plotH - (v / max) * plotH;
+    let out = '';
+    [0, max / 2, max].forEach(v => {
+      out += `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" class="${v ? 'grid' : 'base'}"/>` +
+        `<text x="${padL - 6}" y="${y(v) + 3.5}" class="ax" text-anchor="end">${fmtNum(Math.round(v * 10) / 10)}</text>`;
+    });
+    bars.forEach((b, i) => {
+      const cx = padL + step * i + step / 2, x = cx - bw / 2;
+      const total = b.segs.reduce((a, s) => a + s.v, 0);
+      let base = 0, g = '';
+      const shown = b.segs.filter(sg => sg.v > 0);
+      shown.forEach((sg, j) => {
+        const top = j === shown.length - 1;
+        const y0 = y(base), y1 = y(base + sg.v) + (j > 0 ? 0 : 0);
+        const gap = j > 0 ? 2 : 0; // a 2px white gap between correct and incorrect
+        const hh = Math.max(0, y0 - y1 - gap), yy = y1;
+        const r = top ? Math.min(4, bw / 2, hh) : 0;
+        g += r ? `<path d="M${x},${yy + hh} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${yy + hh} Z" fill="${sg.c}"/>`
+          : `<rect x="${x}" y="${yy}" width="${bw}" height="${hh}" fill="${sg.c}"/>`;
+        base += sg.v;
+      });
+      if (values && total) g += `<text x="${cx}" y="${y(total) - 5}" class="val" text-anchor="middle">${fmtNum(total)}</text>`;
+      const lab = xLabel(b, i);
+      if (lab) g += rotate
+        ? `<text class="ax xl" transform="translate(${cx + 3},${padT + plotH + 10}) rotate(-45)" text-anchor="end">${esc(lab)}</text>`
+        : `<text class="ax" x="${cx}" y="${padT + plotH + 16}" text-anchor="middle">${esc(lab)}</text>`;
+      out += `<g class="bar" data-i="${i}">${g}<rect class="hit" x="${padL + step * i}" y="${padT}" width="${step}" height="${plotH}"/></g>`;
+    });
+    return `<svg class="chart-svg" viewBox="0 0 ${W} ${h}" role="img">${out}</svg>`;
+  }
+  // tap (or hover) a bar to see its numbers in the line under the chart
+  function wireChart(box, bars, fallback) {
+    const cap = $('.chart-cap', box);
+    const set = i => {
+      $$('.bar', box).forEach(g => g.classList.toggle('dim', i !== null && +g.dataset.i !== i));
+      cap.textContent = i === null ? fallback : bars[i].tip;
+    };
+    $$('.bar', box).forEach(g => {
+      g.addEventListener('click', e => { e.stopPropagation(); set(+g.dataset.i); });
+      g.addEventListener('mouseenter', () => set(+g.dataset.i));
+    });
+    $('.chart-svg', box).addEventListener('mouseleave', () => set(null));
+    set(null);
+  }
+
   function viewProgress() {
     const st = stats();
+    const since = range === '30' ? Date.now() - 30 * DAY : 0;
+    const ev = data.events.filter(e => e.t >= since && knownKey(e.k));
+    // chart 1: questions answered per day, correct (bottom) and incorrect (top)
+    const { buckets, unit } = timeBuckets(ev);
+    const unitWord = { day: 'day', week: 'week', month: 'month' }[unit];
+    const label = t => (unit === 'month' ? fmtDay(t, { month: 'short', year: '2-digit' }) : unit === 'week' ? 'Week of ' + fmtDay(t) : fmtDay(t, { weekday: 'short', day: 'numeric', month: 'short' }));
+    const dayBars = buckets.map(b => ({ t: b.t, segs: [{ v: b.ok, c: CORRECT_C }, { v: b.bad, c: WRONG_C }],
+      tip: `${label(b.t)}: ${fmtNum(b.ok + b.bad)} answered · ${fmtNum(b.ok)} correct · ${fmtNum(b.bad)} incorrect` }));
+    const nb = dayBars.length, every = Math.max(1, Math.ceil(nb / 5));
+    const dayX = (b, i) => ((nb - 1 - i) % every === 0 ? (unit === 'month' ? fmtDay(b.t, { month: 'short' }) : fmtDay(b.t)) : '');
+    // chart 2: questions answered per tense
+    const perTense = {}; ev.forEach(e => { const t = V.parseKey(e.k).tense; perTense[t] = (perTense[t] || 0) + 1; });
+    const tenseBars = V.TENSES.map(t => ({ segs: [{ v: perTense[t.id] || 0, c: TENSE_COLOR[t.id] }], name: TENSE_SHORT[t.id],
+      tip: `${t.label}: ${fmtNum(perTense[t.id] || 0)} ${perTense[t.id] === 1 ? 'question' : 'questions'}` }));
+    const empty = !ev.length;
     const node = el(`
       <div class="screen page">
         <header class="bar">
@@ -1028,30 +1153,46 @@
           <h1 class="page-h1">Progress</h1>
           <p class="range-note muted">${range === '30' ? 'Last 30 days' : 'All time'}</p>
           <div class="tiles">
-            <div class="tile">
-              <div class="t-num">${st.forms}</div>
+            <button class="tile" data-to="review">
+              <span class="t-chev">${ICON.chev}</span>
+              <div class="t-num">${fmtNum(st.forms)}</div>
               <div class="t-label">Verb forms studied</div>
-              <div class="t-note">${st.answered} ${st.answered === 1 ? 'question' : 'questions'} answered</div>
-            </div>
-            <div class="tile">
-              <div class="t-num">${st.complete}</div>
+              <div class="t-note">${fmtNum(st.answered)} ${st.answered === 1 ? 'question' : 'questions'} answered · see In Review</div>
+            </button>
+            <button class="tile" data-to="learned">
+              <span class="t-chev">${ICON.chev}</span>
+              <div class="t-num">${fmtNum(st.complete)}</div>
               <div class="t-label">Complete verbs learnt</div>
-              <div class="t-note">every form, in all ${V.TENSES.length} tenses, learned</div>
-            </div>
-            <div class="tile">
-              <div class="t-num">${st.wrong}</div>
+              <div class="t-note">every form, in all ${V.TENSES.length} tenses · see Learned</div>
+            </button>
+            <button class="tile" data-to="incorrect">
+              <span class="t-chev">${ICON.chev}</span>
+              <div class="t-num">${fmtNum(st.wrong)}</div>
               <div class="t-label">Incorrect answers</div>
-              <div class="t-note">still wrong after all tries</div>
-            </div>
+              <div class="t-note">still wrong after all tries · see Incorrect Answers</div>
+            </button>
           </div>
-          <div class="sub-stats">
-            <div><span class="s-num">${st.review}</span><span class="muted">forms in review</span></div>
-            <div><span class="s-num">${st.learned}</span><span class="muted">forms learned</span></div>
-          </div>
+
+          <section class="chart" data-chart="days">
+            <h2 class="chart-h">Questions per ${unitWord}</h2>
+            <div class="legend"><span><i style="background:${CORRECT_C}"></i>Correct</span><span><i style="background:${WRONG_C}"></i>Incorrect</span></div>
+            ${barChart(dayBars, { xLabel: dayX })}
+            <p class="chart-cap muted"></p>
+          </section>
+
+          <section class="chart" data-chart="tenses">
+            <h2 class="chart-h">Questions by tense</h2>
+            ${barChart(tenseBars, { xLabel: b => b.name, rotate: true, values: true, h: 230 })}
+            <p class="chart-cap muted"></p>
+          </section>
         </div>
       </div>`);
     $('[data-act="close"]', node).onclick = () => go('quiz');
     $$('[data-r]', node).forEach(b => b.onclick = () => { range = b.dataset.r; render(); });
+    $$('[data-to]', node).forEach(b => b.onclick = () => { listKey = b.dataset.to; listSearch = ''; listFrom = 'progress'; go('list'); });
+    const total = st.answered;
+    wireChart($('[data-chart="days"]', node), dayBars, empty ? 'No questions answered yet.' : `Tap a bar to see that ${unitWord}. ${fmtNum(total)} answered in all.`);
+    wireChart($('[data-chart="tenses"]', node), tenseBars, empty ? 'No questions answered yet.' : 'Tap a bar to see that tense.');
     return node;
   }
 

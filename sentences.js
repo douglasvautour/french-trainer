@@ -212,13 +212,13 @@
   // tu-forms ending in a vowel take an s before y/en: manges-en, vas-y
   const impVerb = (form, pronoun, cl) => (pronoun === 'tu' && (cl[0] === 'y' || cl[0] === 'en') && /[ea]$/.test(form) ? form + 's' : form);
 
-  function buildImperative(v, pronoun, pat, mode) {
+  function buildImperative(v, pronoun, pat, mode, specIn) {
     if (!['tu', 'nous', 'vous'].includes(pronoun)) return null;
     if (/R\+(y|do)|do\+y/.test(pat.type)) return null; // awkward in the imperative
     if (IMP_SKIP.has(v.id) || IMP_SKIP_PAT.has(v.id + ':' + pat.type)) return null;
     const p = V.verbPart(v, 'imperatif', pronoun);
     if (!p) return null;
-    const spec = makeSpec(pat, pronoun, true);
+    const spec = specIn || makeSpec(pat, pronoun, true);
     const cl = impClitics(spec, pronoun);
     if (mode === 'pron' && !cl.length) return null;
     const tail = impTail(cl);
@@ -244,10 +244,10 @@
    * Build a question. mode: 'verb' (fill in the verb), 'pron' (fill in subject + pronouns), 'both'.
    * Returns { ans, before, after, english, cues, spec, pattern } or null if the sentence doesn't exist.
    */
-  function build(v, tense, pronoun, pat, mode) {
-    if (tense === 'imperatif') return buildImperative(v, pronoun, pat, mode);
+  function build(v, tense, pronoun, pat, mode, specIn) {
+    if (tense === 'imperatif') return buildImperative(v, pronoun, pat, mode, specIn);
     if (pat.type.includes('y') && v.inf === 'aller' && (tense === 'futur' || tense === 'cond')) return null; // j'irai, not j'y irai
-    const spec = makeSpec(pat, pronoun);
+    const spec = specIn || makeSpec(pat, pronoun); // specIn: replaying a missed question
     const vf = verbForms(v, tense, pronoun, spec);
     if (!vf) return null;
     const clitics = cliticsOf(spec, pronoun);

@@ -238,9 +238,13 @@
     if (!n) return 'empty';
     const acc = (form === 'fr' ? ans.acceptBlank.concat(ans.acceptFull) : ans.acceptFull).map(norm);
     if (acc.includes(n)) return 'correct';
-    const ns = strip(n);
-    if (acc.some(a => strip(a) === ns)) return 'accent';
-    const dh = x => strip(x).replace(/-/g, ' ').replace(/\s+/g, ' ').trim(); // donne le moi -> donne-le-moi
+    // 'accent' only when every difference is an accented letter typed without its accent (e for é, c for ç)
+    const onlyMissing = a => {
+      const x = [...n], y = [...a];
+      return x.length === y.length && x.every((c, i) => c === y[i] || (c === strip(y[i]) && c !== y[i]));
+    };
+    if (acc.some(onlyMissing)) return 'accent';
+    const dh = x => x.replace(/-/g, ' ').replace(/\s+/g, ' ').trim(); // donne le moi -> donne-le-moi
     if (acc.some(a => dh(a) === dh(n))) return 'hyphen';
     return 'wrong';
   }
