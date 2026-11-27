@@ -1,7 +1,7 @@
 /* Offline support: cache the app shell, and Google Fonts once they've loaded. */
-const VERSION = 'apprenez-v17';
+const VERSION = 'apprenez-v18';
 const SHELL = [
-  './', 'index.html', 'app.js', 'verbs.js', 'verbs-data.js', 'sentences.js', 'guide.js', 'definitions.js', 'nouns-data.js', 'nouns.js', 'noun-defs.js', 'manifest.webmanifest',
+  './', 'index.html', 'app.js', 'verbs.js', 'verbs-data.js', 'sentences.js', 'guide.js', 'definitions.js', 'nouns-data.js', 'nouns.js', 'levels.js', 'noun-defs.js', 'manifest.webmanifest',
   'fonts/montserrat-400.woff', 'fonts/montserrat-600.woff', 'fonts/crimson-400.woff', 'fonts/crimson-700.woff',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];

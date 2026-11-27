@@ -1,10 +1,21 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '17';
+  const APP_VERSION = '18';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
   const N = window.Nouns;
+  /* CEFR levels: words from FLELex (levels.js), grammar from the usual order of French courses */
+  const LV_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const LV_NAME = { A1: 'Beginner', A2: 'Elementary', B1: 'Intermediate', B2: 'Upper intermediate', C1: 'Advanced', C2: 'Proficient' };
+  const LV = { v: {}, n: {} };
+  if (window.LEVELS) ['v', 'n'].forEach(t => Object.entries(window.LEVELS[t] || {}).forEach(([l, ws]) => ws.split(' ').forEach(w => { LV[t][w] = l; })));
+  const verbLevel = v => LV.v[v.inf] || null;
+  const nounLevel = n => LV.n[n.w] || null;
+  const GRAMMAR_LEVEL = { present: 'A1', pc: 'A1', imperatif: 'A1', imparfait: 'A2', futur: 'A2', cond: 'A2', pqp: 'B1', subj: 'B1', cp: 'B1', fa: 'B2', ps: 'C1',
+    subj_pron: 'A1', refl: 'A1', do: 'A2', io: 'A2', y: 'A2', en: 'A2', order: 'B1', modal: 'A2', def: 'A1', ind: 'A1', part: 'A1', pos: 'A1', dem: 'A1', plural: 'A1' };
+  const lvTag = l => (l ? ` <span class="lvl lvl-${l}" title="CEFR level ${l}">${l}</span>` : '');
+  const LV_KEYS = LV_LIST.map(l => 'lv' + l);
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const el = html => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -27,7 +38,7 @@
     otherVerbs: { modal: false },
     pronouns: Object.fromEntries(V.PRONOUNS.map(p => [p, true])),
     tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
-    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false },
+    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false, lvA1: false, lvA2: false, lvB1: false, lvB2: false, lvC1: false, lvC2: false },
   });
   const EMPTY_DATA = () => ({ custom: [], excluded: [], forms: {}, events: [], missed: {} });
   function merge(def, val) {
@@ -60,13 +71,13 @@
     answerForms: { noun: true, det: true },
     dets: { def: true, ind: true, part: true, pos: true, dem: true },
     nouns: { plural: true },
-    sources: { common: true, g1: false, g2: false, custom: false, review: false, learned: false, incorrect: false },
+    sources: { common: true, g1: false, g2: false, custom: false, review: false, learned: false, incorrect: false, lvA1: false, lvA2: false, lvB1: false, lvB2: false, lvC1: false, lvC2: false },
   });
   const DEFAULT_VB = () => ({
     num: 10,
     types: { fill: true, dnd: true },
     tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
-    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false },
+    sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false, lvA1: false, lvA2: false, lvB1: false, lvB2: false, lvC1: false, lvC2: false },
   });
   const settingsFor = (m, raw) => (m === 'vb' ? merge(DEFAULT_VB(), raw) : m === 'nd' ? merge(DEFAULT_ND(), raw) : migrateSettings(raw));
   const dataFor = raw => Object.assign(EMPTY_DATA(), raw || {});
@@ -126,7 +137,8 @@
   const missedKeys = () => Object.keys(data.missed).filter(k => known(data.missed[k].v)).sort((a, b) => data.missed[b].at - data.missed[a].at);
   const isCustom = id => data.custom.includes(id);
   data.excluded = []; // excluding verbs from lists was removed; nothing stays hidden
-  const groupIds = key => mod === 'nd' ? N.NOUNS.filter(n => n.group === key).map(n => n.id) : V.VERBS.filter(v => (key === 'common' ? v.common : v.group === +key.slice(1))).map(v => v.id);
+  const groupIds = key => key.startsWith('lv') ? (mod === 'nd' ? N.NOUNS.filter(n => nounLevel(n) === key.slice(2)).map(n => n.id) : V.VERBS.filter(v => verbLevel(v) === key.slice(2)).map(v => v.id))
+    : mod === 'nd' ? N.NOUNS.filter(n => n.group === key).map(n => n.id) : V.VERBS.filter(v => (key === 'common' ? v.common : v.group === +key.slice(1))).map(v => v.id);
   function toggleCustom(id) {
     if (isCustom(id)) data.custom = data.custom.filter(x => x !== id); else data.custom.push(id);
     saveData();
@@ -140,7 +152,7 @@
   function buildPool() {
     const T = selTenses(), P = selPronouns(), src = settings.sources;
     const ids = new Set();
-    ['common', 'g1', 'g2', 'g3'].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
+    ['common', 'g1', 'g2', 'g3', ...LV_KEYS].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
     if (src.custom) data.custom.forEach(id => { if (V.BY_ID[id]) ids.add(id); });
     const verbs = [...ids];
     const forms = [];
@@ -701,7 +713,7 @@
   function buildVPool() {
     const T = selTenses(), src = settings.sources;
     const ids = new Set();
-    ['common', 'g1', 'g2', 'g3'].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
+    ['common', 'g1', 'g2', 'g3', ...LV_KEYS].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
     const verbs = [...ids];
     const pairs = [];
     const add = (id, tense) => { if (V.BY_ID[id]) pairs.push({ id, tense }); };
@@ -979,7 +991,7 @@
   /* ================= Nouns & Determiners ================= */
   function buildNPool() {
     const src = settings.sources, ids = new Set();
-    ['common', 'g1', 'g2'].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
+    ['common', 'g1', 'g2', ...LV_KEYS].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
     if (src.custom) data.custom.forEach(id => { if (N.BY_ID[id]) ids.add(id); });
     const list = [...ids], extra = [];
     const formItems = keys => keys.forEach(k => { const p = N.parseKey(k); if (N.BY_ID[p.id]) extra.push({ id: p.id, v: p.v }); });
@@ -1138,7 +1150,7 @@
   /* ---------------- Settings ---------------- */
   function check(id, label, checked, sub = '') {
     return `<label class="check"><input type="checkbox" data-id="${esc(id)}" ${checked ? 'checked' : ''}><span class="box">${ICON.check}</span>
-      <span class="lbl">${label}${sub ? `<small>${sub}</small>` : ''}</span></label>`;
+      <span class="lbl"><span class="lbl-main">${label}</span>${sub ? `<small>${sub}</small>` : ''}</span></label>`;
   }
   const dots = n => `<span class="streak" aria-label="${n} of 5 in a row">${[0, 1, 2, 3, 4].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
   const typeName = t => (t === 'mc' ? 'Multiple choice' : 'Fill in the blank');
@@ -1165,7 +1177,9 @@
     learned: { label: 'Learned', sub: 'answered correctly 5 times in a row' },
     incorrect: { label: 'Incorrect Answers', sub: 'phrases you missed, until you get them right' },
   };
-  const sourcesFor = () => (mod === 'nd' ? ND_SOURCES : mod === 'vb' ? Object.fromEntries(Object.entries(SOURCES).map(([k, o]) => [k, VB_SUB[k] ? Object.assign({}, o, { sub: VB_SUB[k] }) : o])) : SOURCES);
+  const levelSources = what => Object.fromEntries(LV_LIST.map(l => ['lv' + l, { label: `${l} · ${LV_NAME[l]}`, sub: `${what} first met at ${l}`, level: l }]));
+  const sourcesFor = () => Object.assign({}, mod === 'nd' ? ND_SOURCES : mod === 'vb' ? Object.fromEntries(Object.entries(SOURCES).map(([k, o]) => [k, VB_SUB[k] ? Object.assign({}, o, { sub: VB_SUB[k] }) : o])) : SOURCES,
+    levelSources(mod === 'nd' ? 'nouns' : 'verbs'));
   function sourceCount(key) {
     if (key === 'custom') return data.custom.length;
     if (key === 'review') return reviewKeys().length;
@@ -1235,14 +1249,14 @@
             <h2>Question Content</h2>
             ${nd ? `<h3>Determiners</h3>
             <div class="checks" data-set="dets">
-              ${N.KINDS.map(k => check(k.id, `<span lang="fr">${k.set}</span>`, s.dets[k.id], k.label)).join('')}
+              ${N.KINDS.map(k => check(k.id, `<span lang="fr">${k.set}</span>${lvTag(GRAMMAR_LEVEL[k.id])}`, s.dets[k.id], k.label)).join('')}
             </div>
             <p class="group-note muted">With all of these off, nouns appear with <span lang="fr">le, la, l’</span> or <span lang="fr">les</span>, and only the noun is tested.</p>
             <h3>Nouns</h3>
             <div class="checks" data-set="nouns">
-              ${check('plural', 'Plural nouns', s.nouns.plural, 'otherwise nouns are singular')}
+              ${check('plural', 'Plural nouns' + lvTag('A1'), s.nouns.plural, 'otherwise nouns are singular')}
             </div>` : ''}
-            ${vb || nd ? '' : `<h3>Subject Pronouns</h3>
+            ${vb || nd ? '' : `<h3>Subject Pronouns${lvTag('A1')}</h3>
             <div class="checks two" data-set="pronouns">
               <div>${left.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
               <div>${right.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
@@ -1250,25 +1264,25 @@
             <p class="warn-note" data-warn="pronouns">Select at least one pronoun.</p>`}
             ${nd ? '' : `<h3>Tenses</h3>
             <div class="checks" data-set="tenses">
-              ${V.TENSES.map(t => check(t.id, `<span lang="fr">${t.label}</span>`, s.tenses[t.id])).join('')}
+              ${V.TENSES.map(t => check(t.id, `<span lang="fr">${t.label}</span>${lvTag(GRAMMAR_LEVEL[t.id])}`, s.tenses[t.id])).join('')}
             </div>
             <p class="warn-note" data-warn="tenses">Select at least one tense.</p>`}
             ${vb || nd ? '' : `<h3>Other Verbs</h3>
             <div class="checks" data-set="otherVerbs">
-              ${check('modal', 'Modal verbs', s.otherVerbs.modal, '<span lang="fr">pouvoir, vouloir, devoir, savoir, falloir</span> + infinitive')}
+              ${check('modal', 'Modal verbs' + lvTag('A2'), s.otherVerbs.modal, '<span lang="fr">pouvoir, vouloir, devoir, savoir, falloir</span> + infinitive')}
             </div>
             <h3>Other Pronouns</h3>
             <div class="checks" data-set="objPron">
-              ${check('do', 'Direct object', s.objPron.do, '<span lang="fr">me, te, le, la, nous, vous, les</span>')}
-              ${check('io', 'Indirect object', s.objPron.io, '<span lang="fr">me, te, lui, nous, vous, leur</span>')}
-              ${check('refl', 'Reflexive', s.objPron.refl, '<span lang="fr">me, te, se, nous, vous</span>')}
-              ${check('y', '<span lang="fr">y</span>', s.objPron.y, 'there, about it, in it…')}
-              ${check('en', '<span lang="fr">en</span>', s.objPron.en, 'some, about it, from there…')}
+              ${check('do', 'Direct object' + lvTag('A2'), s.objPron.do, '<span lang="fr">me, te, le, la, nous, vous, les</span>')}
+              ${check('io', 'Indirect object' + lvTag('A2'), s.objPron.io, '<span lang="fr">me, te, lui, nous, vous, leur</span>')}
+              ${check('refl', 'Reflexive' + lvTag('A1'), s.objPron.refl, '<span lang="fr">me, te, se, nous, vous</span>')}
+              ${check('y', '<span lang="fr">y</span>' + lvTag('A2'), s.objPron.y, 'there, about it, in it…')}
+              ${check('en', '<span lang="fr">en</span>' + lvTag('A2'), s.objPron.en, 'some, about it, from there…')}
             </div>
-            <p class="group-note muted">With all of these off, questions use only the subject and the verb.</p>`}
+            <p class="group-note muted">With all of these off, questions use only the subject and the verb. Two pronouns together (<span lang="fr">je le lui donne</span>) are usually taught at B1.</p>`}
             <h3>Study Content</h3>
             <div class="checks sources" data-set="sources">
-              ${Object.entries(sourcesFor()).map(([id, o]) => `
+              ${Object.entries(sourcesFor()).map(([id, o]) => `${id === 'lvA1' ? '<p class="src-sub">By CEFR level <span class="muted">· from FLELex</span></p>' : ''}
                 <div class="source">
                   <div class="source-row">
                     ${check(id, o.label, s.sources[id], o.sub)}
@@ -1298,6 +1312,7 @@
           <p class="foot muted">Your progress is stored only on this device.</p>
           <p class="foot muted credits">Verb conjugations from the <a href="https://pauillac.inria.fr/~sagot/index.html#lefff">Lefff</a> by Benoît Sagot (Inria), used under the <a href="data/LICENSE-LGPLLR.txt">LGPL-LR licence</a>.</p>
           <p class="foot muted credits">Verb meanings and examples from the <a href="https://en.wiktionary.org/">English Wiktionary</a>, by Wiktionary contributors, via <a href="https://kaikki.org/">Wiktextract</a>, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (reformatted).</p>
+          <p class="foot muted credits">CEFR levels of verbs and nouns from <a href="https://cental.uclouvain.be/flelex/">FLELex</a> (François, Gala, Watrin &amp; Fairon, 2014), used under the <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0 licence</a>. Levels of tenses, pronouns and determiners follow the usual order of French courses.</p>
           <p class="foot muted credits">Nouns: frequencies from <a href="http://www.lexique.org/">Lexique 3.83</a> (New, Pallier et al.); genders, plurals, meanings and examples from the English Wiktionary; both used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (adapted).</p>
           <p class="foot muted credits">App version ${APP_VERSION}</p>
         </div>
@@ -1669,7 +1684,7 @@
         </header>
         <div class="content">
           <h1 class="verb-title" lang="fr">${esc(v.id)}</h1>
-          <p class="verb-sub">${hasDefs(v) ? `<a href="#" class="def-link" data-act="meanings">${esc(V.englishGloss(v))}</a>` : esc(V.englishGloss(v))} · ${GROUP_NAME[v.group]} · ${AUX_NAME[v.aux]}</p>
+          <p class="verb-sub">${hasDefs(v) ? `<a href="#" class="def-link" data-act="meanings">${esc(V.englishGloss(v))}</a>` : esc(V.englishGloss(v))} · ${GROUP_NAME[v.group]} · ${AUX_NAME[v.aux]}${lvTag(verbLevel(v))}</p>
           <p class="verb-legend"><span><i class="ldot"></i>learned form</span><span><i class="rdot"></i>reviewed form</span></p>
           ${V.TENSES.map(t => `
             <section class="vt">
@@ -1809,7 +1824,7 @@
         </header>
         <div class="content">
           <h1 class="verb-title" lang="fr">${esc(n.w)}</h1>
-          <p class="verb-sub">${hasLink ? `<a href="#" class="def-link" data-act="meanings">${esc(n.en)}</a>` : esc(n.en)} · ${n.pluralOnly ? g0 + ' plural' : n.fem && n.fem !== n.w ? 'masculine and feminine' : n.person ? 'masculine or feminine' : g0} · ${groupName}, no. ${fmtNum(n.rank)}</p>
+          <p class="verb-sub">${hasLink ? `<a href="#" class="def-link" data-act="meanings">${esc(n.en)}</a>` : esc(n.en)} · ${n.pluralOnly ? g0 + ' plural' : n.fem && n.fem !== n.w ? 'masculine and feminine' : n.person ? 'masculine or feminine' : g0} · ${groupName}, no. ${fmtNum(n.rank)}${lvTag(nounLevel(n))}</p>
           <p class="verb-legend"><span><i class="ldot"></i>learned form</span><span><i class="rdot"></i>reviewed form</span></p>
           <table class="nf-table">
             <tr><th></th><th>Singular</th><th>Plural</th></tr>
@@ -1938,7 +1953,7 @@
     const G = window.GUIDE;
     const item = (x, color) => `
       <section class="gd">
-        <h3 lang="fr"${color ? ` style="color:${color}"` : ''}>${esc(x.title)}</h3>
+        <h3 lang="fr"${color ? ` style="color:${color}"` : ''}>${esc(x.title)}${lvTag(GRAMMAR_LEVEL[x.id === 'subj' && !color ? 'subj_pron' : x.id])}</h3>
         <div class="q-rule"></div>
         ${x.list ? `<p class="gd-list" lang="fr">${esc(x.list)}</p>` : ''}
         <p>${esc(x.use)}</p>
@@ -2158,6 +2173,7 @@
     if (!window.GUIDE) out.push('guide.js');
     if (!window.NOUN_DATA) out.push('nouns-data.js');
     if (!window.Nouns) out.push('nouns.js');
+    if (!window.LEVELS) out.push('levels.js');
     if (window.GUIDE && !window.GUIDE.nouns) out.push('guide.js (an older version is on the site)');
     if (window.Verbs && window.Verbs.VERBS.length && !window.Verbs.VERBS.some(v => v.pats)) out.push('verbs-data.js (an older version is on the site)');
     return out;

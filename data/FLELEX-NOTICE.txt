@@ -1,0 +1,18 @@
+CEFR levels: levels.js
+
+Source: FLELex (FLELex-TT version), https://cental.uclouvain.be/flelex/
+        Thomas François, Nùria Gala, Patrick Watrin, Cédrick Fairon (2014). "FLELex: a graded lexical
+        resource for French foreign learners". Proceedings of LREC 2014, Reykjavik.
+        UCLouvain (CENTAL) and Aix-Marseille Université.
+Licence: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0),
+         https://creativecommons.org/licenses/by-nc/4.0/
+
+FLELex gives, for each word, how often it appears in French textbooks and readers at each CEFR level.
+Changes made for this app: each verb and noun in the app gets one level, the first level at which
+FLELex records it at least once per million words (a word never that frequent takes the level where
+it is most frequent). Words FLELex doesn't list have no level. Only these levels are kept, not the
+frequencies.
+
+levels.js is adapted from FLELex and is shared under the same licence, CC BY-NC 4.0: it may not be
+used commercially. The levels shown for tenses, pronouns and determiners are not from FLELex; they
+follow the usual order of French courses and are part of the app (MIT License).

@@ -24,6 +24,7 @@ Backups (Settings → Save Backup) are one .zip with a JSON file per module; Res
 - `nouns.js` – noun phrases, determiners and wrong answers for Nouns & Determiners
 - `nouns-data.js`, `noun-defs.js` – the 5,000 nouns (Lexique 3.83 frequencies + Wiktionary), CC BY-SA 4.0, built by `tools/extract_nouns.py` with hand corrections in `tools/noun_fixes.txt`; see `data/NOUNS-NOTICE.txt`
 - `data/LICENSE-CC-BY-SA-4.0.txt` – the full text of the CC BY-SA 4.0 licence
+- `levels.js` – CEFR levels (A1–C2) of the verbs and nouns, from FLELex (CC BY-NC 4.0), built by `tools/extract_levels.py`; see `data/FLELEX-NOTICE.txt`
 - `tools/` – scripts and English glosses used to build `verbs-data.js`
 - `sw.js`, `manifest.webmanifest`, `icons/`, `fonts/` – offline support, Home Screen icon, fonts
 

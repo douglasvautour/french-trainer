@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 [Your name]
+Copyright (c) 2026 Douglas Vautour
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -28,3 +28,5 @@ Nor does it cover definitions.js (verb meanings and examples from the English Wi
 which is distributed under CC BY-SA 4.0: see data/WIKTIONARY-NOTICE.txt.
 Nor does it cover nouns-data.js and noun-defs.js (Lexique 3.83 and the English Wiktionary),
 which are distributed under CC BY-SA 4.0: see data/NOUNS-NOTICE.txt.
+Nor does it cover levels.js (CEFR levels from FLELex), which is distributed under
+CC BY-NC 4.0 (non-commercial): see data/FLELEX-NOTICE.txt.
