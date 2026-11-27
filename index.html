@@ -406,6 +406,36 @@ abbr.ptag { text-decoration: none; border: 0; cursor: default; }
   .quiz.vq .dnd-hint { display: none; }
   .quiz.vq .bank { gap: 8px; }
 }
+
+/* ---- Nouns & Determiners ---- */
+.q-hint .later { display: none; }
+.nslot { display: inline-block; min-width: 3.2em; min-height: 1.05em; border-bottom: 2.5px solid #cfccc6; margin: 0 .12em; vertical-align: baseline; text-align: center; line-height: 1.1; }
+.nslot .chip { font-size: .62em; vertical-align: middle; padding: 3px 10px; }
+.nslot.good { color: var(--good); border-color: var(--good); }
+.nslot.fixed { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); border-radius: 4px 4px 0 0; }
+.q-scaffold .nslot { min-width: 2.6em; }
+.nd-dnd .bank .chip { font-size: 20px; padding: 7px 14px; }
+.nf-table { width: 100%; border-collapse: collapse; margin-top: 18px; font-family: var(--serif); }
+.nf-table th { font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 6px 4px; }
+.nf-table td { font-size: 20px; line-height: 1.25; padding: 10px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+.nf-table td small { display: block; font-family: var(--sans); font-size: 12px; color: var(--muted); margin-top: 2px; }
+.nf-table td .alt { font-size: 14px; color: var(--muted); }
+.nf-table td.g { font-family: var(--sans); font-size: 12px; color: var(--ink-2); width: 84px; padding-top: 14px; }
+.nf-table td.na { color: var(--muted); }
+.nnote { font-size: 14px; color: var(--ink-2); margin: 16px 0 0; line-height: 1.55; }
+.nnote b { font-family: var(--serif); font-size: 16px; color: var(--ink); }
+.gd-rules { margin: 10px 0 12px; display: grid; grid-template-columns: minmax(0, 38%) 1fr; gap: 6px 12px; font-size: 14px; }
+.gd-rules dt { color: var(--ink-2); font-weight: 600; }
+.nw { white-space: nowrap; }
+.gd-rules dd { margin: 0; font-family: var(--serif); font-size: 16px; line-height: 1.35; }
+@media (max-width: 380px) { .gd-rules { grid-template-columns: 1fr; gap: 2px; } .gd-rules dd { margin-bottom: 8px; } }
+
+/* shorter phones: multiple choice fits without scrolling */
+@media (max-height: 760px) {
+  .a-inner.mc { padding-top: 14px; gap: 10px; }
+  .opts { gap: 8px; }
+  .opt { min-height: 50px; padding-top: 7px; padding-bottom: 7px; font-size: 21px; }
+}
 </style>
 </head>
 <body>
@@ -415,6 +445,8 @@ abbr.ptag { text-decoration: none; border: 0; cursor: default; }
 <script src="verbs.js"></script>
 <script src="sentences.js"></script>
 <script src="guide.js"></script>
+<script src="nouns-data.js"></script>
+<script src="nouns.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

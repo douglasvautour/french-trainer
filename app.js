@@ -1,9 +1,10 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '16';
+  const APP_VERSION = '17';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
+  const N = window.Nouns;
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const el = html => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -48,15 +49,26 @@
   }
   /* Two modules, each with its own settings and data:
      vp = Verbs & Pronouns (sentences), vb = Verbs (every form of a tense at once) */
-  const KEYS = { vp: { s: KEY_S, d: KEY_D }, vb: { s: 'apprenez.vb.settings.v1', d: 'apprenez.vb.data.v1' } };
-  const MOD_NAME = { vp: 'Verbs & Pronouns', vb: 'Verbs' };
+  const KEYS = { vp: { s: KEY_S, d: KEY_D }, vb: { s: 'apprenez.vb.settings.v1', d: 'apprenez.vb.data.v1' }, nd: { s: 'apprenez.nd.settings.v1', d: 'apprenez.nd.data.v1' } };
+  const MOD_NAME = { vp: 'Verbs & Pronouns', vb: 'Verbs', nd: 'Nouns & Determiners' };
+  const MOD_SHORT = { vp: 'Verbs & Pronouns', vb: 'Verbs', nd: 'Nouns' }; // quiz header, next to four icons
+  const MODS = ['vb', 'vp', 'nd'];
+  const DEFAULT_ND = () => ({
+    num: 10,
+    types: { fill: true, dnd: true, mc: true },
+    forms: { en: true, fr: true },
+    answerForms: { noun: true, det: true },
+    dets: { def: true, ind: true, part: true, pos: true, dem: true },
+    nouns: { plural: true },
+    sources: { common: true, g1: false, g2: false, custom: false, review: false, learned: false, incorrect: false },
+  });
   const DEFAULT_VB = () => ({
     num: 10,
     types: { fill: true, dnd: true },
     tenses: Object.fromEntries(V.TENSES.map(t => [t.id, ['present', 'pc', 'imparfait', 'futur'].includes(t.id)])),
     sources: { common: true, g1: false, g2: false, g3: false, custom: false, review: false, learned: false, incorrect: false },
   });
-  const settingsFor = (m, raw) => (m === 'vb' ? merge(DEFAULT_VB(), raw) : migrateSettings(raw));
+  const settingsFor = (m, raw) => (m === 'vb' ? merge(DEFAULT_VB(), raw) : m === 'nd' ? merge(DEFAULT_ND(), raw) : migrateSettings(raw));
   const dataFor = raw => Object.assign(EMPTY_DATA(), raw || {});
   let mod = 'vp';
   let settings = settingsFor('vp', load(KEY_S, null));
@@ -76,7 +88,8 @@
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignore */ }
 
   /* ---------------- Learning data ---------------- */
-  const knownKey = k => !!V.BY_ID[k.split('|')[0]]; // ignore forms of verbs no longer in the list
+  const known = id => (mod === 'nd' ? !!N.BY_ID[id] : !!V.BY_ID[id]);
+  const knownKey = k => known(k.split('|')[0]); // ignore forms of words no longer in the list
   const reviewKeys = () => Object.keys(data.forms).filter(k => knownKey(k) && !data.forms[k].learnedAt);
   const learnedKeys = () => Object.keys(data.forms).filter(k => knownKey(k) && data.forms[k].learnedAt);
   function verbStats() {
@@ -95,6 +108,7 @@
       .sort((a, b) => m[b].learned - m[a].learned || a.localeCompare(b, 'fr'));
   }
   function record(q, ok) {
+    if (q.nd) return recordN(q, ok);
     const k = V.formKey(q.verb.id, q.tense, V.SLOT[q.pronoun]);
     const now = Date.now();
     const f = data.forms[k] || (data.forms[k] = { streak: 0, correct: 0, wrong: 0, seen: 0, first: now, learnedAt: null });
@@ -109,10 +123,10 @@
       inner: q.inner ? q.inner.id : undefined };
     saveData();
   }
-  const missedKeys = () => Object.keys(data.missed).filter(k => V.BY_ID[data.missed[k].v]).sort((a, b) => data.missed[b].at - data.missed[a].at);
+  const missedKeys = () => Object.keys(data.missed).filter(k => known(data.missed[k].v)).sort((a, b) => data.missed[b].at - data.missed[a].at);
   const isCustom = id => data.custom.includes(id);
   data.excluded = []; // excluding verbs from lists was removed; nothing stays hidden
-  const groupIds = key => V.VERBS.filter(v => (key === 'common' ? v.common : v.group === +key.slice(1))).map(v => v.id);
+  const groupIds = key => mod === 'nd' ? N.NOUNS.filter(n => n.group === key).map(n => n.id) : V.VERBS.filter(v => (key === 'common' ? v.common : v.group === +key.slice(1))).map(v => v.id);
   function toggleCustom(id) {
     if (isCustom(id)) data.custom = data.custom.filter(x => x !== id); else data.custom.push(id);
     saveData();
@@ -225,6 +239,15 @@
   }
 
   function settingsProblem() {
+    if (mod === 'nd') {
+      const none = o => !Object.values(o).some(Boolean);
+      if (none(settings.types)) return 'Choose at least one question type in Settings.';
+      if (none(settings.forms)) return 'Choose at least one question form in Settings.';
+      if (none(settings.answerForms)) return 'Choose at least one answer form in Settings.';
+      if (!settings.answerForms.noun && none(settings.dets)) return 'Choose a determiner in Settings, or tick Nouns under Answer Form.';
+      if (none(settings.sources)) return 'Choose some study content in Settings.';
+      return null;
+    }
     if (mod === 'vb') {
       if (!settings.types.fill && !settings.types.dnd) return 'Choose at least one question type in Settings.';
       if (!selTenses().length) return 'Choose at least one tense in Settings.';
@@ -261,7 +284,7 @@
 
   function newQuiz() {
     const problem = settingsProblem();
-    const qs = problem ? [] : mod === 'vb' ? buildVQuestions(settings.num) : buildQuestions(settings.num);
+    const qs = problem ? [] : mod === 'vb' ? buildVQuestions(settings.num) : mod === 'nd' ? buildNQuestions(settings.num) : buildQuestions(settings.num);
     quiz = { qs, i: 0, tries: 0, state: 'ask', draft: '', picked: null, lastOk: null, results: [], done: false, sig: sigOf(), problem: problem || (qs.length ? null : NO_MATCH) };
   }
 
@@ -271,7 +294,7 @@
     quiz.sig = sigOf();
     const keep = quiz.state === 'answered' ? quiz.i + 1 : quiz.i;
     const problem = settingsProblem();
-    const fresh = problem ? [] : (mod === 'vb' ? buildVQuestions : buildQuestions)(Math.max(0, settings.num - keep));
+    const fresh = problem ? [] : (mod === 'vb' ? buildVQuestions : mod === 'nd' ? buildNQuestions : buildQuestions)(Math.max(0, settings.num - keep));
     quiz.qs = quiz.qs.slice(0, keep).concat(fresh);
     if (!quiz.qs.length) { quiz.problem = problem || NO_MATCH; return; }
     quiz.problem = null;
@@ -298,6 +321,7 @@
     cross: svg('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>', 'stroke-width="2.4"'),
     write: svg('<path d="M13 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V11"/><path d="M8 13h3M8 17h7"/><path d="M18.6 2.6l2.3 2.3-7.1 7.1-3 .7.7-3z"/>'),
     tap: svg('<path d="M9.5 14V6.5a1.5 1.5 0 0 1 3 0V12"/><path d="M12.5 11a1.5 1.5 0 0 1 3 0v1.5"/><path d="M15.5 12a1.5 1.5 0 0 1 3 0v3.5a5.5 5.5 0 0 1-5.5 5.5h-1a5.2 5.2 0 0 1-4.3-2.3l-2.3-3.4a1.5 1.5 0 0 1 2.4-1.8l1.2 1.5"/><path d="M6.3 4.3 5 3M15.7 4.3 17 3M11 2.2V1"/>'),
+    tag: svg('<path d="M3.5 12.5V5a1.5 1.5 0 0 1 1.5-1.5h7.5l8 8-9 9-8-8z"/><circle cx="8" cy="8" r="1.6"/>'),
     grid: svg('<rect x="3.5" y="4" width="7" height="4" rx="1"/><rect x="13.5" y="4" width="7" height="4" rx="1"/><rect x="3.5" y="10" width="7" height="4" rx="1"/><rect x="13.5" y="10" width="7" height="4" rx="1"/><rect x="3.5" y="16" width="7" height="4" rx="1"/><rect x="13.5" y="16" width="7" height="4" rx="1"/>'),
     ret: svg('<path d="M20 5v6a3 3 0 0 1-3 3H6"/><path d="M10 10l-4 4 4 4"/>', 'stroke-width="2"'),
     book: svg('<path d="M12 6.5C10 5 7.5 4.5 4 4.8v13.4c3.5-.3 6 .2 8 1.8 2-1.6 4.5-2.1 8-1.8V4.8c-3.5-.3-6 .2-8 1.7z"/><path d="M12 6.5V20"/>'),
@@ -320,7 +344,7 @@
   function render() {
     const app = $('#app');
     app.innerHTML = '';
-    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb, guide: viewGuide, meanings: viewMeanings }[view]());
+    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb, guide: viewGuide, meanings: viewMeanings, noun: viewNoun, nmeanings: viewNMeanings }[view]());
   }
 
   let toastTimer;
@@ -356,6 +380,13 @@
               <span class="m-chev">${ICON.chev}</span>
             </button>
           </li>
+          <li>
+            <button class="module" data-go="quiz" data-mod="nd">
+              <span class="m-icon">${ICON.tag}</span>
+              <span class="m-text"><span class="m-title">Nouns &amp; Determiners</span><span class="m-sub">${fmtNum(N.NOUNS.length)} nouns · 5 kinds of determiner</span></span>
+              <span class="m-chev">${ICON.chev}</span>
+            </button>
+          </li>
         </ul>
       </main>`);
     $$('[data-mod]', node).forEach(b => b.onclick = () => { setModule(b.dataset.mod); go('quiz'); });
@@ -370,7 +401,7 @@
       <div class="screen quiz">
         <header class="bar">
           <button class="icon" data-act="home" aria-label="Back to home">${ICON.back}</button>
-          <div class="bar-title">${esc(MOD_NAME[mod])}</div>
+          <div class="bar-title">${esc(MOD_SHORT[mod])}</div>
           <div class="bar-right">
             <button class="icon star" data-act="star" aria-label="Add verb to Custom list" ${showQ ? '' : 'disabled'}>${ICON.star}</button>
             <button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button>
@@ -405,36 +436,42 @@
       const on = isCustom((q.study || q.verb).id);
       starBtn.classList.toggle('on', on);
       starBtn.setAttribute('aria-pressed', on);
-      starBtn.setAttribute('aria-label', on ? 'Remove verb from Custom list' : 'Add verb to Custom list');
+      starBtn.setAttribute('aria-label', on ? 'Remove from Custom list' : 'Add to Custom list');
     };
     setStar();
-    starBtn.onclick = () => { const sid = (q.study || q.verb).id; const on = toggleCustom(sid); setStar(); toast(on ? `${sid} added to Custom` : `${sid} removed from Custom`); };
+    starBtn.onclick = () => { const sid = (q.study || q.verb).id; const on = toggleCustom(sid); setStar(); const nm = q.nd ? q.noun.w : sid; toast(on ? `${nm} added to Custom` : `${nm} removed from Custom`); };
 
     // Question
-    const tl = V.TENSE_LABEL[q.tense];
+    const tl = q.label || V.TENSE_LABEL[q.tense];
     const blankHtml = `<span class="blank"><span class="blank-fill"></span></span>`;
     const scaffold = (q.before ? esc(cap(q.before)) + (/['-]$/.test(q.before) ? '' : ' ') : '') + blankHtml + (q.after ? (q.after.startsWith('-') ? '' : '<span class="after-sp"> </span>') + esc(q.after) : '');
-    const sentence = q.form === 'fr' ? scaffold : esc(q.english);
+    const sentence = q.form === 'fr' ? scaffold : esc(q.nd ? cap(q.english) : q.english);
     // subtitle: English subject (when you type it) • infinitive • English for the other pronouns (when you type them)
     const askPron = q.form === 'fr' && q.mode !== 'verb';
     const imp = q.tense === 'imperatif';
     const hintParts = [];
     // each pronoun to type gets its own item, labelled with its type: SUBJECT I • donner • DIRECT it (m.) • INDIRECT to him
-    const SHORT = { subject: 'subj', direct: 'dir', indirect: 'ind', reflexive: 'refl', adverbial: 'adv' };
+    const SHORT = { subject: 'subj', direct: 'dir', indirect: 'ind', reflexive: 'refl', adverbial: 'adv', determiner: 'det', noun: 'noun' };
     const tagged = (t, en) => `<span class="cue"><abbr class="ptag${en ? '' : ' solo'}" title="${t}">${SHORT[t] || t}</abbr>${en ? esc(en) : ''}</span>`;
-    if (imp && q.form === 'fr') hintParts.push(`<span class="cue">${esc({ tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun])}</span>`);
+    if (q.nd) {
+      // DET my • NOUN friend (f.); the noun itself appears (and links) once it's visible or answered
+      if (q.form === 'fr' && q.mode !== 'noun') hintParts.push(tagged('determiner', q.b.detEn));
+      if (q.form === 'fr' && q.mode !== 'det') hintParts.push(tagged('noun', q.b.nounEn));
+      const visible = q.form === 'fr' && q.mode === 'det';
+      hintParts.push(`<span lang="fr" class="q-inf${visible ? '' : ' later'}" data-id="${esc(q.noun.id)}">${esc(q.noun.w)}</span>`);
+    } else if (imp && q.form === 'fr') hintParts.push(`<span class="cue">${esc({ tu: 'you (sing.)', nous: "let's", vous: 'you (pl.)' }[q.pronoun])}</span>`);
     // with a modal, the subject isn't part of the pronoun blank ("Je peux ___ faire")
     else if (askPron && !(q.inner && q.mode === 'pron')) hintParts.push(tagged('subject', q.verb.id === 'falloir' ? 'it' : V.englishSubject(q.pronoun, q.verb)));
-    // both verbs when there are two: pouvoir • faire
-    [q.verb].concat(q.inner ? [q.inner] : []).forEach(x => hintParts.push(`<span lang="fr" class="q-inf" data-id="${esc(x.id)}">${esc(x.id)}</span>`));
-    if (askPron) q.cues.forEach(c => hintParts.push(tagged(c.t, c.en)));
+    // both verbs when there are two: pouvoir • faire (added below)
+    if (!q.nd) [q.verb].concat(q.inner ? [q.inner] : []).forEach(x => hintParts.push(`<span lang="fr" class="q-inf" data-id="${esc(x.id)}">${esc(x.id)}</span>`));
+    if (askPron && !q.nd) q.cues.forEach(c => hintParts.push(tagged(c.t, c.en)));
     qa.innerHTML = `
-      <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : 'Fill in the blank'}</div>
-      <p class="q-tense" lang="fr" style="color:${TENSE_COLOR[q.tense]}">${esc(tl)}</p>
+      <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : q.kind === 'dnd' ? 'Drag and drop' : 'Fill in the blank'}</div>
+      <p class="q-tense" lang="fr" style="color:${q.color || TENSE_COLOR[q.tense]}">${esc(tl)}</p>
       <div class="q-rule"></div>
       <p class="q-text" lang="${q.form === 'fr' ? 'fr' : 'en'}">${sentence}</p>
       ${q.form === 'en' && q.mode !== 'both' ? `<p class="q-scaffold" lang="fr">${scaffold}</p>` : ''}
-      <p class="q-hint">${hintParts.join('<span class="sep" aria-hidden="true">•</span>')}${q.form === 'en' ? `<span class="how">${q.kind === 'mc' ? ICON.tap : ICON.write}Answer in French</span>` : ''}</p>`;
+      <p class="q-hint">${hintParts.map((h, i) => (i ? `<span class="sep${/class="q-inf[^"]*later/.test(h) ? ' later' : ''}" aria-hidden="true">•</span>` : '') + h).join('')}${q.form === 'en' || q.nd ? `<span class="how">${q.kind === 'fill' ? ICON.write : ICON.tap}Answer in French</span>` : ''}</p>`;
     const fillBlank = (txt, ok) => {
       const b = $('.blank-fill', qa); if (!b) return;
       b.textContent = q.before ? txt : cap(txt); // the blank starts the sentence: capital letter
@@ -448,20 +485,23 @@
     // once answered, the infinitive under the question opens the verb's conjugations; Back returns to the quiz
     const linkVerb = () => $$('span.q-inf', qa).forEach(s => {
       const id = s.dataset.id, a = document.createElement('a');
-      a.href = '#'; a.className = 'q-inf def-link'; a.lang = 'fr'; a.textContent = id;
-      a.onclick = e => { e.preventDefault(); verbId = id; verbFrom = 'quiz'; go('verb'); };
+      a.href = '#'; a.className = 'q-inf def-link'; a.lang = 'fr'; a.textContent = s.textContent;
+      a.onclick = e => { e.preventDefault(); if (q.nd) { nounId = id; nounFrom = 'quiz'; go('noun'); } else { verbId = id; verbFrom = 'quiz'; go('verb'); } };
+      $$('.later', qa).forEach(x => x.classList.remove('later'));
       s.replaceWith(a);
     });
     if (quiz.state === 'answered') linkVerb();
     const finishQ = ok => { quiz.state = 'answered'; quiz.lastOk = ok; quiz.results.push({ q, ok }); record(q, ok); $('.pbar div', node).style.width = (quiz.results.length / quiz.qs.length) * 100 + '%'; linkVerb(); };
 
-    if (q.kind === 'fill') {
+    if (q.kind === 'dnd') {
+      renderNDnd(q, qa, aa, finishQ, linkVerb, nextLabel);
+    } else if (q.kind === 'fill') {
       aa.innerHTML = `
         <div class="a-inner fill">
           <label class="field">
             <span class="sr">Your answer</span>
             <input id="answer" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" lang="fr" enterkeyhint="done"
-              placeholder="${q.mode === 'verb' ? 'Type the missing verb' : q.mode === 'pron' ? 'Type the subject and pronouns' : 'Type the sentence in French'}">
+              placeholder="${q.nd ? (q.mode === 'noun' ? 'Type the noun' : q.mode === 'det' ? 'Type the determiner' : 'Type the determiner and noun') : q.mode === 'verb' ? 'Type the missing verb' : q.mode === 'pron' ? 'Type the subject and pronouns' : 'Type the sentence in French'}">
           </label>
           <div class="accents" aria-label="Accented letters">${['é', 'è', 'ê', 'à', 'â', 'ç', 'î', 'ï', 'ô', 'û', 'ù', 'ë'].map(c => `<button type="button" class="key" data-k="${c}">${c}</button>`).join('')}</div>
           <div class="msg" aria-live="polite"><span class="msg-main"></span><span class="msg-sub"></span></div>
@@ -572,7 +612,7 @@
         </div>
         <ul class="results">
           ${quiz.results.map(r => `<li class="${r.ok ? 'good' : 'bad'}"><span class="mark">${r.ok ? ICON.check : ICON.cross}</span>
-            <span class="r-text"><span lang="fr">${esc(r.q.ans.full)}</span><small>${r.q.slots ? `${esc(V.TENSE_LABEL[r.q.tense])} · ${r.n} of ${r.q.slots.length} forms` : `${esc(r.q.verb.id)}${r.q.inner ? ' + ' + esc(r.q.inner.id) : ''} · ${esc(V.TENSE_LABEL[r.q.tense])}`}</small></span></li>`).join('')}
+            <span class="r-text"><span lang="fr">${esc(r.q.ans.full)}</span><small>${r.q.nd ? esc(r.q.english) + ' · ' + esc(r.q.label) : r.q.slots ? `${esc(V.TENSE_LABEL[r.q.tense])} · ${r.n} of ${r.q.slots.length} forms` : `${esc(r.q.verb.id)}${r.q.inner ? ' + ' + esc(r.q.inner.id) : ''} · ${esc(V.TENSE_LABEL[r.q.tense])}`}</small></span></li>`).join('')}
         </ul>
       </div>`;
     $('[data-act="home"]', aa).onclick = () => go('home');
@@ -936,6 +976,165 @@
     });
   }
 
+  /* ================= Nouns & Determiners ================= */
+  function buildNPool() {
+    const src = settings.sources, ids = new Set();
+    ['common', 'g1', 'g2'].forEach(k => { if (src[k]) groupIds(k).forEach(id => ids.add(id)); });
+    if (src.custom) data.custom.forEach(id => { if (N.BY_ID[id]) ids.add(id); });
+    const list = [...ids], extra = [];
+    const formItems = keys => keys.forEach(k => { const p = N.parseKey(k); if (N.BY_ID[p.id]) extra.push({ id: p.id, v: p.v }); });
+    if (src.review) formItems(reviewKeys());
+    if (src.learned) formItems(learnedKeys());
+    if (src.incorrect) missedKeys().forEach(k => extra.push({ id: data.missed[k].v, miss: k }));
+    const A = list.length;
+    return { size: A + extra.length, draw() { const r = Math.floor(Math.random() * (A + extra.length)); return r >= A ? extra[r - A] : { id: list[r] }; } };
+  }
+  function buildNQuestions(n) {
+    const pool = buildNPool();
+    if (!pool.size) return [];
+    const out = [], used = new Set();
+    for (let tries = 0; out.length < n && tries < n * 80; tries++) {
+      const c = pool.draw(), k = c.miss || c.id;
+      if (used.has(k) && used.size < Math.min(pool.size, n)) continue;
+      const q = makeNQuestion(c);
+      if (!q) continue;
+      used.add(k); out.push(q);
+    }
+    return out;
+  }
+  function makeNQuestion(c) {
+    const n = N.BY_ID[c.id];
+    if (!n) return null;
+    const af = settings.answerForms;
+    const kinds = [settings.types.fill && 'fill', settings.types.dnd && 'dnd', settings.types.mc && 'mc'].filter(Boolean);
+    const forms = [settings.forms.en && 'en', settings.forms.fr && 'fr'].filter(Boolean);
+    const m = c.miss && data.missed[c.miss];
+    let v, dk, owner = null, ownerEn = null, mode, b;
+    const anyDet = N.KINDS.some(k => settings.dets[k.id]);
+    if (m) { v = m.var; dk = m.kind; owner = m.owner || null; ownerEn = m.ownerEn || null; mode = m.mode; }
+    else {
+      let vs = N.variants(n).filter(x => settings.nouns.plural || !N.isPlural(x) || n.pluralOnly);
+      if (c.v) vs = vs.filter(x => x === c.v);
+      if (!vs.length) return null;
+      v = pick(vs);
+      // with no determiners ticked, the noun comes with le/la/l'/les and only the noun is asked
+      const dks = anyDet ? N.KINDS.map(k => k.id).filter(id => settings.dets[id] && N.kindOk(id, n, v)) : ['def'];
+      if (!dks.length) return null;
+      dk = pick(dks);
+      if (dk === 'pos') { owner = pick(N.OWNERS); ownerEn = owner === 'il' ? pick(['il', 'ilf']) : owner; }
+      const modes = !anyDet ? ['noun'] : af.noun && af.det ? ['noun', 'det', 'both'] : af.noun ? ['noun'] : ['det'];
+      mode = pick(modes);
+    }
+    b = N.build(n, v, dk, owner, ownerEn, mode);
+    if (!b) return null;
+    let kind = pick(kinds);
+    // regular nouns have too few believable wrong forms for multiple choice or tiles: ask the whole phrase, or type it
+    const enough = () => (kind === 'mc' ? N.options(b, n).length >= 3 : kind === 'dnd' ? N.tiles(b, n).extras.length >= 2 : true);
+    if (!enough() && !m && mode === 'noun' && anyDet && af.det) { b = N.build(n, v, dk, owner, ownerEn, 'both'); mode = 'both'; }
+    if (!enough()) kind = kinds.includes('fill') ? 'fill' : kinds.find(k => k !== kind && (kind = k) && enough()) || null;
+    if (!kind || !enough()) return null;
+    // an English meaning shared by two nouns ("place") is asked in French
+    let form = pick(forms);
+    if (form === 'en' && !n.uq) { if (!forms.includes('fr')) return null; form = 'fr'; }
+    const K = N.KIND[dk];
+    const q = { nd: true, noun: n, verb: { id: n.id }, study: { id: n.id }, var: v, dkind: dk, owner, ownerEn, kind, form, mode, b,
+      label: anyDet || m ? K.label : 'nom', color: anyDet || m ? K.color : 'var(--ink-2)',
+      ans: b.ans, before: b.before, after: b.after, english: b.english };
+    if (kind === 'mc') {
+      const opts = [b.ans.blank].concat(N.options(b, n));
+      q.options = V.shuffle(opts);
+      q.correctIndex = q.options.indexOf(b.ans.blank);
+    }
+    if (kind === 'dnd') q.tiles = N.tiles(b, n);
+    return q;
+  }
+  function recordN(q, ok) {
+    const k = N.formKey(q.noun.id, q.var), now = Date.now();
+    recordForm(k, ok, q.kind, q.ans.full, now);
+    data.events.push({ t: now, k, ok: ok ? 1 : 0, ty: q.kind, dt: q.dkind });
+    const mk = [q.noun.id, q.var, q.dkind, q.owner || '', q.ownerEn || '', q.mode].join('|');
+    if (ok) delete data.missed[mk];
+    else data.missed[mk] = { v: q.noun.id, var: q.var, kind: q.dkind, owner: q.owner, ownerEn: q.ownerEn, mode: q.mode, full: q.ans.full, en: q.english, at: now };
+    saveData();
+  }
+
+  // drag and drop for a noun phrase: one blank (determiner or noun) or two (both)
+  function renderNDnd(q, qa, aa, finishQ, linkVerb, nextLabel) {
+    const T = q.tiles, slots = T.slots;
+    const w = quiz.w || (quiz.w = { place: slots.map(() => null), status: slots.map(() => ''), chips: V.shuffle(slots.map(a => a[0]).concat(T.extras)), msg: null });
+    const answered = quiz.state === 'answered';
+    // the blanks go where the scaffold's blank was
+    let host = q.form === 'fr' ? $('.q-text', qa) : $('.q-scaffold', qa);
+    if (!host) { host = el('<p class="q-scaffold" lang="fr"></p>'); $('.q-text', qa).after(host); }
+    const slotHtml = j => `<span class="nslot" data-j="${j}"></span>`;
+    host.innerHTML = q.mode === 'both' ? slotHtml(0) + ' ' + slotHtml(1)
+      : q.mode === 'det' ? slotHtml(0) + ' ' + esc(q.after) : esc(q.before) + ' ' + slotHtml(0);
+    aa.innerHTML = `
+      <div class="a-inner vq-dnd nd-dnd">
+        <p class="dnd-hint">Drag a word to its blank, or tap it to fill the next one.</p>
+        <div class="bank">${w.chips.map((t, k) => `<span class="chip" data-c="${k}" lang="fr">${esc(t)}</span>`).join('')}</div>
+        <div class="msg" aria-live="polite"><span class="msg-main"></span><span class="msg-sub"></span></div>
+        <button class="btn primary" data-act="submit">${answered ? nextLabel : 'Submit'}</button>
+      </div>`;
+    const btn = $('[data-act="submit"]', aa);
+    const showMsg = () => { const m = $('.msg', aa), x = w.msg; m.className = 'msg' + (x ? ' show ' + x.cls : ''); $('.msg-main', m).textContent = x ? x.main : ''; $('.msg-sub', m).textContent = x ? x.sub || '' : ''; };
+    const setMsg = (main, cls, sub) => { w.msg = { main, cls, sub }; showMsg(); };
+    const paint = () => {
+      slots.forEach((acc, j) => {
+        const sl = $(`.nslot[data-j="${j}"]`, host);
+        sl.className = 'nslot' + (w.status[j] ? ' ' + w.status[j] : '');
+        if (w.status[j] === 'fixed') sl.textContent = acc[0];
+        else if (w.place[j] !== null) sl.innerHTML = w.status[j] ? esc(w.chips[w.place[j]]) : `<span class="chip placed" data-c="${w.place[j]}">${esc(w.chips[w.place[j]])}</span>`;
+        else sl.textContent = '';
+      });
+      const used = new Set(w.place.filter(x => x !== null));
+      $$('.bank .chip', aa).forEach(c => c.classList.toggle('ghost', used.has(+c.dataset.c)));
+      if (quiz.state === 'ask') $$('.nslot .chip', host).forEach(wire);
+    };
+    const placeAt = (k, j) => { const f = w.place.indexOf(k); if (f >= 0) w.place[f] = null; w.place[j] = k; w.msg = null; showMsg(); paint(); };
+    const unplace = k => { const f = w.place.indexOf(k); if (f >= 0) w.place[f] = null; paint(); };
+    function wire(chipEl) {
+      chipEl.onpointerdown = e => {
+        if (quiz.state !== 'ask') return;
+        const k = +chipEl.dataset.c, inBank = !!chipEl.closest('.bank');
+        if (inBank && chipEl.classList.contains('ghost')) return;
+        e.preventDefault();
+        const sx = e.clientX, sy = e.clientY;
+        let ghost = null;
+        const move = ev => {
+          if (!ghost && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) { ghost = chipEl.cloneNode(true); ghost.classList.add('drag'); document.body.appendChild(ghost); chipEl.classList.add('lifted'); }
+          if (ghost) { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; }
+        };
+        const up = ev => {
+          window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+          chipEl.classList.remove('lifted');
+          if (!ghost) { if (inBank) { const j = w.place.indexOf(null); if (j >= 0) placeAt(k, j); } else unplace(k); return; }
+          ghost.remove();
+          const t = document.elementFromPoint(ev.clientX, ev.clientY), sl = t && t.closest('.nslot');
+          if (sl) placeAt(k, +sl.dataset.j); else if (!inBank) unplace(k);
+        };
+        window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+      };
+    }
+    $$('.bank .chip', aa).forEach(wire);
+    const lock = () => { $$('.chip', aa).forEach(c => { c.onpointerdown = null; }); $('.dnd-hint', aa).style.visibility = 'hidden'; btn.textContent = nextLabel; linkVerb(); };
+    btn.onclick = () => {
+      if (quiz.state === 'answered') return advance();
+      if (w.place.some(x => x === null)) { setMsg('Fill every blank first.', 'warn'); return; }
+      quiz.tries++;
+      const good = slots.map((acc, j) => acc.map(V.norm).includes(V.norm(w.chips[w.place[j]])));
+      if (good.every(Boolean)) { w.status = slots.map(() => 'good'); paint(); setMsg('Correct!', 'good'); finishQ(true); lock(); return; }
+      if (quiz.tries >= 3) {
+        // the right words in green, the wrong ones corrected in red
+        w.status = good.map(g => (g ? 'good' : 'fixed')); paint(); setMsg('Not quite.', 'bad', MISSED_NOTE); finishQ(false); lock(); return;
+      }
+      const left = 3 - quiz.tries;
+      setMsg('Not quite. Something is wrong.', 'warn', `Tap a placed word to send it back. ${left} ${left === 1 ? 'try' : 'tries'} left`);
+    };
+    paint(); showMsg();
+    if (answered) lock();
+  }
+
   /* ---------------- Settings ---------------- */
   function check(id, label, checked, sub = '') {
     return `<label class="check"><input type="checkbox" data-id="${esc(id)}" ${checked ? 'checked' : ''}><span class="box">${ICON.check}</span>
@@ -957,6 +1156,16 @@
     incorrect: { label: 'Incorrect Answers', sub: 'phrases you missed, until you get them right', action: 'Remove' },
   };
   const VB_SUB = { custom: 'verbs and tenses you starred', review: 'forms you’ve been quizzed on', incorrect: 'verbs and tenses you missed, until you get them right' };
+  const ND_SOURCES = {
+    common: { label: 'Common Nouns', sub: 'the 500 most frequent' },
+    g1: { label: 'Frequent Nouns', sub: 'ranks 501–2,000' },
+    g2: { label: 'Less Common Nouns', sub: 'ranks 2,001–5,000' },
+    custom: { label: 'Custom', sub: 'nouns you starred' },
+    review: { label: 'In Review', sub: 'forms you’ve been quizzed on' },
+    learned: { label: 'Learned', sub: 'answered correctly 5 times in a row' },
+    incorrect: { label: 'Incorrect Answers', sub: 'phrases you missed, until you get them right' },
+  };
+  const sourcesFor = () => (mod === 'nd' ? ND_SOURCES : mod === 'vb' ? Object.fromEntries(Object.entries(SOURCES).map(([k, o]) => [k, VB_SUB[k] ? Object.assign({}, o, { sub: VB_SUB[k] }) : o])) : SOURCES);
   function sourceCount(key) {
     if (key === 'custom') return data.custom.length;
     if (key === 'review') return reviewKeys().length;
@@ -966,7 +1175,7 @@
   }
 
   function viewSettings() {
-    const s = settings, vb = mod === 'vb';
+    const s = settings, vb = mod === 'vb', nd = mod === 'nd';
     const left = ['je', 'tu', 'il', 'elle', 'on'], right = ['nous', 'vous', 'ils', 'elles'];
     let lastBackup = null; try { lastBackup = +localStorage.getItem('apprenez.lastBackup') || null; } catch (e) { /* ignore */ }
     const node = el(`
@@ -992,10 +1201,22 @@
             <h3>Question Type</h3>
             <div class="checks" data-set="types">
               ${check('fill', 'Fill in the blank', s.types.fill)}
-              ${vb ? check('dnd', 'Drag and drop', s.types.dnd) : check('mc', 'Multiple choice', s.types.mc)}
+              ${vb ? check('dnd', 'Drag and drop', s.types.dnd) : nd ? check('dnd', 'Drag and drop', s.types.dnd) + check('mc', 'Multiple choice', s.types.mc) : check('mc', 'Multiple choice', s.types.mc)}
             </div>
             <p class="warn-note" data-warn="types">Select at least one question type.</p>
-            ${vb ? '' : `<h3>Question Form</h3>
+            ${vb ? '' : nd ? `<h3>Question Form</h3>
+            <div class="checks" data-set="forms">
+              ${check('en', 'English', s.forms.en, 'Questions are shown in English; answer in French')}
+              ${check('fr', 'French', s.forms.fr, 'Questions are French phrases with a blank')}
+            </div>
+            <p class="warn-note" data-warn="forms">Select at least one question form.</p>
+            <h3>Answer Form</h3>
+            <div class="checks" data-set="answerForms">
+              ${check('noun', 'Nouns', s.answerForms.noun, 'Fill in the noun')}
+              ${check('det', 'Determiners', s.answerForms.det, 'Fill in the determiner')}
+            </div>
+            <p class="group-note muted">With both selected, you may be asked for the noun, the determiner, or both.</p>
+            <p class="warn-note" data-warn="answerForms">Select at least one answer form.</p>` : `<h3>Question Form</h3>
             <div class="checks" data-set="forms">
               ${check('en', 'English', s.forms.en, 'Questions are shown in English; answer in French')}
               ${check('fr', 'French', s.forms.fr, 'Questions are French sentences with a blank')}
@@ -1012,18 +1233,27 @@
 
           <section class="group">
             <h2>Question Content</h2>
-            ${vb ? '' : `<h3>Subject Pronouns</h3>
+            ${nd ? `<h3>Determiners</h3>
+            <div class="checks" data-set="dets">
+              ${N.KINDS.map(k => check(k.id, `<span lang="fr">${k.set}</span>`, s.dets[k.id], k.label)).join('')}
+            </div>
+            <p class="group-note muted">With all of these off, nouns appear with <span lang="fr">le, la, l’</span> or <span lang="fr">les</span>, and only the noun is tested.</p>
+            <h3>Nouns</h3>
+            <div class="checks" data-set="nouns">
+              ${check('plural', 'Plural nouns', s.nouns.plural, 'otherwise nouns are singular')}
+            </div>` : ''}
+            ${vb || nd ? '' : `<h3>Subject Pronouns</h3>
             <div class="checks two" data-set="pronouns">
               <div>${left.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
               <div>${right.map(p => check(p, `<span lang="fr">${p}</span>`, s.pronouns[p])).join('')}</div>
             </div>
             <p class="warn-note" data-warn="pronouns">Select at least one pronoun.</p>`}
-            <h3>Tenses</h3>
+            ${nd ? '' : `<h3>Tenses</h3>
             <div class="checks" data-set="tenses">
               ${V.TENSES.map(t => check(t.id, `<span lang="fr">${t.label}</span>`, s.tenses[t.id])).join('')}
             </div>
-            <p class="warn-note" data-warn="tenses">Select at least one tense.</p>
-            ${vb ? '' : `<h3>Other Verbs</h3>
+            <p class="warn-note" data-warn="tenses">Select at least one tense.</p>`}
+            ${vb || nd ? '' : `<h3>Other Verbs</h3>
             <div class="checks" data-set="otherVerbs">
               ${check('modal', 'Modal verbs', s.otherVerbs.modal, '<span lang="fr">pouvoir, vouloir, devoir, savoir, falloir</span> + infinitive')}
             </div>
@@ -1038,7 +1268,7 @@
             <p class="group-note muted">With all of these off, questions use only the subject and the verb.</p>`}
             <h3>Study Content</h3>
             <div class="checks sources" data-set="sources">
-              ${Object.entries(SOURCES).map(([id, o]) => (vb && VB_SUB[id] ? Object.assign({}, o, { sub: VB_SUB[id] }) : o)).map((o, n) => [Object.keys(SOURCES)[n], o]).map(([id, o]) => `
+              ${Object.entries(sourcesFor()).map(([id, o]) => `
                 <div class="source">
                   <div class="source-row">
                     ${check(id, o.label, s.sources[id], o.sub)}
@@ -1051,7 +1281,7 @@
 
           <section class="group">
             <h2>Backup</h2>
-            <p class="muted">Saves your progress, lists and settings for <strong>both modules</strong> in one .zip file, for example in iCloud Drive, with a separate file inside for each module. Restore Backup takes that .zip, or one module’s file on its own.</p>
+            <p class="muted">Saves your progress, lists and settings for <strong>all modules</strong> in one .zip file, for example in iCloud Drive, with a separate file inside for each module. Restore Backup takes that .zip, or one module’s file on its own.</p>
             <div class="row-btns">
               <button class="btn" data-act="backup">Save Backup</button>
               <button class="btn" data-act="restore">Restore Backup</button>
@@ -1062,12 +1292,13 @@
 
           <section class="group danger-zone">
             <h2>Delete Data</h2>
-            <p class="muted">Removes your results and your Custom, In Review, Learned and Incorrect Answers lists for <strong>${esc(MOD_NAME[mod])}</strong> only. ${esc(MOD_NAME[mod === 'vb' ? 'vp' : 'vb'])} keeps its data, and your settings and the verb lists are kept.</p>
+            <p class="muted">Removes your results and your Custom, In Review, Learned and Incorrect Answers lists for <strong>${esc(MOD_NAME[mod])}</strong> only. The other modules keep their data, and your settings and the verb lists are kept.</p>
             <button class="btn danger" data-act="delete">Delete Data</button>
           </section>
           <p class="foot muted">Your progress is stored only on this device.</p>
           <p class="foot muted credits">Verb conjugations from the <a href="https://pauillac.inria.fr/~sagot/index.html#lefff">Lefff</a> by Benoît Sagot (Inria), used under the <a href="data/LICENSE-LGPLLR.txt">LGPL-LR licence</a>.</p>
           <p class="foot muted credits">Verb meanings and examples from the <a href="https://en.wiktionary.org/">English Wiktionary</a>, by Wiktionary contributors, via <a href="https://kaikki.org/">Wiktextract</a>, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (reformatted).</p>
+          <p class="foot muted credits">Nouns: frequencies from <a href="http://www.lexique.org/">Lexique 3.83</a> (New, Pallier et al.); genders, plurals, meanings and examples from the English Wiktionary; both used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (adapted).</p>
           <p class="foot muted credits">App version ${APP_VERSION}</p>
         </div>
       </div>`);
@@ -1079,7 +1310,7 @@
     });
     const warn = () => {
       const none = o => !Object.values(o).some(Boolean);
-      (vb ? ['types', 'tenses', 'sources'] : ['types', 'forms', 'answerForms', 'pronouns', 'tenses', 'sources']).forEach(k => $(`[data-warn="${k}"]`, node).classList.toggle('show', none(s[k])));
+      (vb ? ['types', 'tenses', 'sources'] : nd ? ['types', 'forms', 'answerForms', 'sources'] : ['types', 'forms', 'answerForms', 'pronouns', 'tenses', 'sources']).forEach(k => $(`[data-warn="${k}"]`, node).classList.toggle('show', none(s[k])));
     };
     $$('[data-set]', node).forEach(set => {
       const key = set.dataset.set;
@@ -1182,10 +1413,10 @@
   }
 
   // Backup: one .zip with a file for each module
-  const MOD_FILE = { vp: 'verbs-and-pronouns.json', vb: 'verbs.json' };
+  const MOD_FILE = { vp: 'verbs-and-pronouns.json', vb: 'verbs.json', nd: 'nouns-and-determiners.json' };
   async function saveBackup() {
     const now = new Date();
-    const files = ['vp', 'vb'].map(m => {
+    const files = MODS.map(m => {
       const st = m === mod ? settings : settingsFor(m, load(KEYS[m].s, null));
       const dt = m === mod ? data : dataFor(load(KEYS[m].d, {}));
       return { name: MOD_FILE[m], text: JSON.stringify({ app: 'apprenez-le-francais', version: 2, module: m, moduleName: MOD_NAME[m], exportedAt: now.toISOString(), settings: st, data: dt }) };
@@ -1219,13 +1450,13 @@
       texts.forEach(t => { try { payloads.push(JSON.parse(t)); } catch (e) { /* not JSON */ } });
     } catch (e) { payloads = []; }
     payloads = payloads.filter(b => b && b.app === 'apprenez-le-francais' && b.data && typeof b.data.forms === 'object')
-      .map(b => Object.assign(b, { module: b.module === 'vb' ? 'vb' : 'vp' })); // backups from before the Verbs module are Verbs & Pronouns
+      .map(b => Object.assign(b, { module: KEYS[b.module] ? b.module : 'vp' })); // backups from before the Verbs module are Verbs & Pronouns
     if (!payloads.length) { toast('That file isn’t an Apprenez backup.'); return; }
     const when = payloads[0].exportedAt ? fmtDate(Date.parse(payloads[0].exportedAt)) : 'an unknown date';
-    const list = payloads.map(b => { const n = Object.keys(b.data.forms).length; return `${MOD_NAME[b.module]} (${fmtNum(n)} verb ${n === 1 ? 'form' : 'forms'} studied)`; }).join(' and ');
+    const list = payloads.map(b => { const n = Object.keys(b.data.forms).length; return `${MOD_NAME[b.module]} (${fmtNum(n)} ${n === 1 ? 'form' : 'forms'} studied)`; }).join(', ');
     modal({
       title: 'Restore Backup', confirm: 'Restore',
-      body: `Restore the backup from ${when}: ${list}? It replaces the progress, lists and settings of ${payloads.length > 1 ? 'both modules' : 'that module'}.`,
+      body: `Restore the backup from ${when}: ${list}? It replaces the progress, lists and settings of ${payloads.length > 1 ? 'those modules' : 'that module'}.`,
       onConfirm: () => {
         payloads.forEach(b => { save(KEYS[b.module].s, settingsFor(b.module, b.settings || null)); save(KEYS[b.module].d, dataFor(b.data)); });
         settings = settingsFor(mod, load(KEYS[mod].s, null)); data = dataFor(load(KEYS[mod].d, {}));
@@ -1243,6 +1474,26 @@
   function listItems() {
     const q = V.strip(V.norm(listSearch));
     const match = (...xs) => !q || xs.some(x => V.strip((x || '').toLowerCase()).includes(q));
+    if (mod === 'nd') {
+      const withArt = n => N.join(N.determiner('def', n, n.pluralOnly ? 'p' : 's'), n.pluralOnly ? n.w : n.w);
+      const nounItem = id => { const n = N.BY_ID[id]; return n && { key: id, noun: id, title: withArt(n), sub: n.en + (n.pluralOnly ? ' (plural)' : ''), fr: true, star: isCustom(id), match: n.w }; };
+      let it;
+      if (listKey === 'review' || listKey === 'learned') {
+        const keys = listKey === 'review'
+          ? reviewKeys().sort((a, b) => (data.forms[b].last || 0) - (data.forms[a].last || 0))
+          : learnedKeys().sort((a, b) => data.forms[b].learnedAt - data.forms[a].learnedAt);
+        it = keys.map(k => {
+          const f = data.forms[k], p = N.parseKey(k), n = N.BY_ID[p.id];
+          return { key: k, noun: p.id, title: N.join(N.determiner('def', n, p.v), N.wordOf(n, p.v)), fr: true,
+            sub: `${N.nounEnglish(n, p.v)} · ${N.VARIANT_LABEL[p.v]}` + (listKey === 'review' ? ` · ${typeName(f.type)}` : ` · learned ${fmtDate(f.learnedAt)}`),
+            right: listKey === 'review' ? dots(f.streak) : '', match: n.w };
+        });
+      } else if (listKey === 'incorrect') {
+        it = missedKeys().map(k => { const m = data.missed[k]; return { key: k, noun: m.v, title: m.full, fr: true, sub: `${m.en} · ${(N.KIND[m.kind] || {}).label || ''}`, match: m.v }; });
+      } else if (listKey === 'custom') it = data.custom.map(nounItem).filter(Boolean);
+      else it = groupIds(listKey).map(nounItem);
+      return it.filter(x => match(x.title, x.sub, x.match));
+    }
     const verbItem = id => {
       const v = V.BY_ID[id];
       return v && { key: id, verb: id, title: id, sub: V.englishGloss(v), fr: true, star: isCustom(id) };
@@ -1282,7 +1533,7 @@
   }
 
   function viewList() {
-    const src = SOURCES[listKey];
+    const src = sourcesFor()[listKey];
     const canRemove = listKey === 'custom'; // only Custom lets you remove verbs
     const actionLabel = 'Remove';
     let items = listItems();
@@ -1331,7 +1582,9 @@
         $('.sw-inline', li).onclick = e => { e.stopPropagation(); act(li); };
       } else li.classList.add('fixed');
       $('.sw-main', li).addEventListener('click', e => {
-        if (e.target.closest('.sw-inline') || li.classList.contains('open') || !V.BY_ID[it.verb]) return;
+        if (e.target.closest('.sw-inline') || li.classList.contains('open')) return;
+        if (it.noun) { if (N.BY_ID[it.noun]) { nounId = it.noun; nounFrom = 'list'; go('noun'); } return; }
+        if (!V.BY_ID[it.verb]) return;
         verbId = it.verb; verbFrom = 'list'; go('verb');
       });
       return li;
@@ -1374,13 +1627,13 @@
     return node;
   }
 
-  const noun = n => (mod === 'vb' && (listKey === 'custom' || listKey === 'incorrect') ? (n === 1 ? 'verb tense' : 'verb tenses') : listKey === 'incorrect' ? (n === 1 ? 'phrase' : 'phrases') : listKey === 'review' || listKey === 'learned' ? (n === 1 ? 'form' : 'forms') : (n === 1 ? 'verb' : 'verbs'));
+  const noun = n => (mod === 'nd' ? (listKey === 'incorrect' ? (n === 1 ? 'phrase' : 'phrases') : listKey === 'review' || listKey === 'learned' ? (n === 1 ? 'form' : 'forms') : (n === 1 ? 'noun' : 'nouns')) : mod === 'vb' && (listKey === 'custom' || listKey === 'incorrect') ? (n === 1 ? 'verb tense' : 'verb tenses') : listKey === 'incorrect' ? (n === 1 ? 'phrase' : 'phrases') : listKey === 'review' || listKey === 'learned' ? (n === 1 ? 'form' : 'forms') : (n === 1 ? 'verb' : 'verbs'));
   /* ---------------- Verb page ---------------- */
   const GROUP_NAME = { 1: 'first group', 2: 'second group', 3: 'third group' };
   const AUX_NAME = { a: 'avoir', e: 'être', E: 'être or avoir' };
   function viewVerb() {
     const v = V.BY_ID[verbId];
-    const backLabel = verbFrom === 'quiz' ? 'Quiz' : SOURCES[listKey] ? SOURCES[listKey].label : 'Back';
+    const backLabel = verbFrom === 'quiz' ? 'Quiz' : sourcesFor()[listKey] ? sourcesFor()[listKey].label : 'Back';
     const slotLabel = ['je', 'tu', 'il/elle/on', 'nous', 'vous', 'ils/elles'];
     const dotFor = (tense, slot) => {
       const f = data.forms[V.formKey(v.id, tense, slot)];
@@ -1497,9 +1750,122 @@
     return node;
   }
 
+  /* ---------------- Noun pages ---------------- */
+  let nounId = null, nounFrom = 'list', nounScroll = 0, ndefsState = window.NDEFS ? 'ready' : 'idle';
+  function loadNDefs() {
+    if (ndefsState !== 'idle') return;
+    ndefsState = 'loading';
+    const sc = document.createElement('script');
+    sc.src = 'noun-defs.js';
+    sc.onload = () => { ndefsState = window.NDEFS ? 'ready' : 'failed'; if (view === 'nmeanings') render(); };
+    sc.onerror = () => { ndefsState = 'failed'; if (view === 'nmeanings') render(); };
+    document.head.appendChild(sc);
+  }
+  const ndefsOf = n => (window.NDEFS && window.NDEFS[n.id]) || null;
+  const GENDER_NAME = { m: 'masculine', f: 'feminine' };
+  function viewNoun() {
+    const n = N.BY_ID[nounId];
+    loadNDefs();
+    const backLabel = nounFrom === 'quiz' ? 'Quiz' : sourcesFor()[listKey] ? sourcesFor()[listKey].label : 'Back';
+    const dot = v => { const f = data.forms[N.formKey(n.id, v)]; return !f ? '' : f.learnedAt ? '<i class="ldot" title="Learned"></i>' : '<i class="rdot" title="In review"></i>'; };
+    const cellFor = v => {
+      const w = N.wordOf(n, v), alts = N.altsOf(n, v);
+      return `<td lang="fr">${esc(N.join(N.determiner('def', n, v), w))}${dot(v)}${alts.length > 1 ? `<span class="alt"> or ${esc(alts.slice(1).join(', '))}</span>` : ''}<small>${esc(N.join(N.determiner('ind', n, v), w))}</small></td>`;
+    };
+    const rows = [];
+    const g0 = GENDER_NAME[n.g];
+    if (n.pluralOnly) rows.push(`<tr><td class="g">${g0}</td><td class="na">—</td>${cellFor('p')}</tr>`);
+    else {
+      rows.push(`<tr><td class="g">${g0}</td>${cellFor('s')}${cellFor('p')}</tr>`);
+      if (n.fem) rows.push(`<tr><td class="g">feminine</td>${cellFor('fs')}${cellFor('fp')}</tr>`);
+    }
+    // short notes that apply to this noun
+    const notes = [];
+    const el1 = N.elides(n, n.w);
+    if (n.h) notes.push(`Starts with an aspirated <i>h</i>, so there’s no <i>l’</i>: <b lang="fr">${esc(N.join(N.determiner('def', n, 's'), n.w))}</b>, <b lang="fr">${esc(N.join(N.determiner('dem', n, 's'), n.w))}</b>.`);
+    else if (el1 && !n.pluralOnly) {
+      const ex = [N.join(N.determiner('def', n, 's'), n.w), N.join(N.determiner('dem', n, 's'), n.w)];
+      if (n.g === 'f' || n.fem) ex.push(N.join(N.determiner('pos', n, n.g === 'f' ? 's' : 'fs', 'je'), n.g === 'f' ? n.w : n.fem) + (n.g === 'f' || n.fem ? '' : ''));
+      notes.push(`Starts with a vowel sound, so: ${ex.map(x => `<b lang="fr">${esc(x)}</b>`).join(', ')}${n.g === 'f' || n.fem ? ' (not <i>ma</i>)' : ''}.`);
+    }
+    if (!n.pluralOnly && !n.nopl) {
+      const reg = n.pl[0] === n.w + 's' || (/[sxz]$/.test(n.w) && n.pl[0] === n.w);
+      if (!reg) notes.push(`Irregular plural: <b lang="fr">${esc(n.w)}</b> → <b lang="fr">${esc(n.pl.join(' or '))}</b>.`);
+      else if (/[sxz]$/.test(n.w)) notes.push(`Ends in <i>-${esc(n.w.slice(-1))}</i>, so the plural doesn’t change: <b lang="fr">les ${esc(n.w)}</b>.`);
+    }
+    if (n.person) notes.push(n.fem === n.w
+      ? `The same word for a man or a woman: only the determiner changes, <b lang="fr">${esc(N.join(N.determiner('ind', n, 's'), n.w))}</b> / <b lang="fr">${esc(N.join(N.determiner('ind', n, 'fs'), n.w))}</b>.`
+      : `For people, the gender follows the person: <b lang="fr">${esc(N.join(N.determiner('ind', n, 's'), n.w))}</b> for a man, <b lang="fr">${esc(N.join(N.determiner('ind', n, 'fs'), n.fem))}</b> for a woman.`);
+    if (n.mass) notes.push(`Often used for “some”: <b lang="fr">${esc(N.join(N.determiner('part', n, 's'), n.w))}</b>.`);
+    if (n.pluralOnly) notes.push(`Used only in the plural: <b lang="fr">les ${esc(n.w)}</b>.`);
+    const groupName = { common: 'Common Nouns', g1: 'Frequent Nouns', g2: 'Less Common Nouns' }[n.group];
+    const hasLink = ndefsState !== 'failed';
+    const node = el(`
+      <div class="screen page verb-page noun-page">
+        <header class="bar">
+          <button class="icon back-text" data-act="back" aria-label="Back to ${esc(backLabel)}">${ICON.back}<span>${esc(backLabel)}</span></button>
+          <div class="bar-title"></div>
+          <div class="bar-right"><button class="icon star" data-act="star">${ICON.star}</button><button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button></div>
+        </header>
+        <div class="content">
+          <h1 class="verb-title" lang="fr">${esc(n.w)}</h1>
+          <p class="verb-sub">${hasLink ? `<a href="#" class="def-link" data-act="meanings">${esc(n.en)}</a>` : esc(n.en)} · ${n.pluralOnly ? g0 + ' plural' : n.fem && n.fem !== n.w ? 'masculine and feminine' : n.person ? 'masculine or feminine' : g0} · ${groupName}, no. ${fmtNum(n.rank)}</p>
+          <p class="verb-legend"><span><i class="ldot"></i>learned form</span><span><i class="rdot"></i>reviewed form</span></p>
+          <table class="nf-table">
+            <tr><th></th><th>Singular</th><th>Plural</th></tr>
+            ${rows.join('')}
+          </table>
+          ${notes.map(x => `<p class="nnote">${x}</p>`).join('')}
+        </div>
+      </div>`);
+    $('[data-act="back"]', node).onclick = () => go(nounFrom);
+    $('[data-act="guide"]', node).onclick = () => openGuide();
+    const ml = $('[data-act="meanings"]', node);
+    if (ml) ml.onclick = e => { e.preventDefault(); nounScroll = window.scrollY; go('nmeanings'); };
+    const star = $('[data-act="star"]', node);
+    const setStar = () => { const on = isCustom(n.id); star.classList.toggle('on', on); star.setAttribute('aria-pressed', on); star.setAttribute('aria-label', on ? 'Remove from Custom list' : 'Add to Custom list'); };
+    setStar();
+    star.onclick = () => { const on = toggleCustom(n.id); setStar(); toast(on ? `${n.w} added to Custom` : `${n.w} removed from Custom`); };
+    return node;
+  }
+  function viewNMeanings() {
+    const n = N.BY_ID[nounId];
+    loadNDefs();
+    const defs = ndefsOf(n) || [];
+    const wikt = 'https://en.wiktionary.org/wiki/' + encodeURIComponent(n.w) + '#French';
+    let body;
+    if (ndefsState === 'loading' || ndefsState === 'idle') body = '<p class="muted">Loading meanings…</p>';
+    else if (ndefsState === 'failed') body = '<p class="muted">The meanings file (noun-defs.js) couldn’t be loaded. Open the app once while online, or check that the file is on your site.</p>';
+    else body = `
+          <ol class="senses">
+            ${defs.map(([gloss, tags, ex], i) => `
+              <li class="sense">
+                <div class="s-head"><span class="s-num">${i + 1}</span><span class="s-gloss">${esc(gloss)}</span></div>
+                ${tags.length ? `<div class="s-tags">${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
+                ${ex.length ? `<ul class="gd-ex">${ex.map(([fr, en]) => `<li><span class="fr" lang="fr">${esc(fr)}</span>${en ? `<span class="en">${esc(en)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+              </li>`).join('')}
+          </ol>
+          <p class="foot muted credits">Meanings and examples from the <a href="${wikt}" target="_blank" rel="noopener">Wiktionary entry for <span lang="fr">${esc(n.w)}</span></a>, by Wiktionary contributors, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0 licence</a>. Reformatted for this app.</p>`;
+    const node = el(`
+      <div class="screen page meanings-page">
+        <header class="bar">
+          <button class="icon back-text" data-act="back" aria-label="Back to ${esc(n.w)}">${ICON.back}<span lang="fr">${esc(n.w)}</span></button>
+          <div class="bar-title"></div>
+          <div class="bar-right"></div>
+        </header>
+        <div class="content">
+          <h1 class="verb-title" lang="fr">${esc(N.join(N.determiner('def', n, n.pluralOnly ? 'p' : 's'), n.w))}</h1>
+          <p class="verb-sub">Meanings${ndefsState === 'ready' ? ` · ${defs.length} ${defs.length === 1 ? 'sense' : 'senses'}` : ''}</p>
+          ${body}
+        </div>
+      </div>`);
+    $('[data-act="back"]', node).onclick = () => { const y = nounScroll; go('noun'); requestAnimationFrame(() => window.scrollTo(0, y)); };
+    return node;
+  }
+
   function emptyText(key) {
     return {
-      custom: 'Tap the star on a quiz question or verb page to add the verb here.',
+      custom: mod === 'nd' ? 'Tap the star on a quiz question or noun page to add the noun here.' : 'Tap the star on a quiz question or verb page to add the verb here.',
       review: 'Forms appear here after you answer them in a quiz.',
       learned: 'Nothing learned yet. Answer a form correctly five times in a row to learn it.',
       incorrect: 'Nothing here. Questions you miss appear here, and leave once you answer them correctly.',
@@ -1566,6 +1932,8 @@
   /* ---------------- Grammar guide ---------------- */
   let guideFrom = 'quiz', guideScroll = 0;
   function openGuide() { guideFrom = view; guideScroll = window.scrollY; go('guide'); }
+  // keep endings like "-eau" or "-s" on one line
+  const nw = h => h.replace(/(^|[\s(/·])(-[a-zàâäçéèêëîïôöùûü]+)/g, '$1<span class="nw">$2</span>');
   function viewGuide() {
     const G = window.GUIDE;
     const item = (x, color) => `
@@ -1575,6 +1943,7 @@
         ${x.list ? `<p class="gd-list" lang="fr">${esc(x.list)}</p>` : ''}
         <p>${esc(x.use)}</p>
         ${x.form ? `<p class="gd-form"><strong>How it’s formed.</strong> ${esc(x.form)}</p>` : ''}
+        ${x.rules ? `<dl class="gd-rules">${x.rules.map(([a, b]) => `<dt>${nw(esc(a))}</dt><dd lang="fr">${nw(esc(b))}</dd>`).join('')}</dl>` : ''}
         <ul class="gd-ex">${x.ex.map(([fr, en]) => `<li><span class="fr" lang="fr">${esc(fr)}</span><span class="en">${esc(en)}</span></li>`).join('')}</ul>
       </section>`;
     const node = el(`
@@ -1585,11 +1954,16 @@
           <div class="bar-right"></div>
         </header>
         <div class="content">
+          ${mod === 'nd' ? `<nav class="gd-jump"><a href="#" data-jump="g-nouns">Nouns</a><a href="#" data-jump="g-dets">Determiners</a></nav>
+          <h2 class="gd-h" id="g-nouns">Nouns</h2>
+          ${G.nouns.map(x => item(x)).join('')}
+          <h2 class="gd-h" id="g-dets">Determiners</h2>
+          ${G.dets.map(x => item(x, N.KIND[x.id].color)).join('')}` : `
           ${mod === 'vb' ? '' : '<nav class="gd-jump"><a href="#" data-jump="g-verbs">Verbs</a><a href="#" data-jump="g-pron">Pronouns</a></nav>'}
           <h2 class="gd-h" id="g-verbs">Verbs</h2>
           ${G.verbs.map(x => item(x, TENSE_COLOR[x.id])).join('')}
           ${mod === 'vb' ? '' : `<h2 class="gd-h" id="g-pron">Pronouns</h2>
-          ${G.pronouns.map(x => item(x)).join('')}`}
+          ${G.pronouns.map(x => item(x)).join('')}`}`}
         </div>
       </div>`);
     $('[data-act="close"]', node).onclick = () => { const y = guideScroll; go(guideFrom); if (guideFrom !== 'quiz') requestAnimationFrame(() => window.scrollTo(0, y)); };
@@ -1607,7 +1981,9 @@
       forms: new Set(ev.flatMap(e => e.fk || [e.k])).size,
       answered: ev.length,
       wrong: ev.filter(e => !e.ok).length,
-      complete: Object.keys(vs).filter(id => V.BY_ID[id] && vs[id].learned >= V.nForms(V.BY_ID[id]) && vs[id].lastLearned >= since).length,
+      complete: mod === 'nd'
+        ? Object.keys(vs).filter(id => N.BY_ID[id] && vs[id].learned >= N.nForms(N.BY_ID[id]) && vs[id].lastLearned >= since).length
+        : Object.keys(vs).filter(id => V.BY_ID[id] && vs[id].learned >= V.nForms(V.BY_ID[id]) && vs[id].lastLearned >= since).length,
       review: reviewKeys().length, learned: learnedKeys().length,
     };
   }
@@ -1705,8 +2081,12 @@
     const nb = dayBars.length, every = Math.max(1, Math.ceil(nb / 5));
     const dayX = (b, i) => ((nb - 1 - i) % every === 0 ? (unit === 'month' ? fmtDay(b.t, { month: 'short' }) : fmtDay(b.t)) : '');
     // chart 2: questions answered per tense
-    const perTense = {}; ev.forEach(e => { const t = V.parseKey(e.k).tense; perTense[t] = (perTense[t] || 0) + 1; });
-    const tenseBars = V.TENSES.map(t => ({ segs: [{ v: perTense[t.id] || 0, c: TENSE_COLOR[t.id] }], name: TENSE_SHORT[t.id],
+    // second chart: by tense, or by kind of determiner in Nouns & Determiners
+    const nd = mod === 'nd';
+    const perTense = {}; ev.forEach(e => { const t = nd ? e.dt : V.parseKey(e.k).tense; perTense[t] = (perTense[t] || 0) + 1; });
+    const cats = nd ? N.KINDS.map(k => ({ id: k.id, label: k.label, short: { def: 'défini', ind: 'indéfini', part: 'partitif', pos: 'possessif', dem: 'démonstratif' }[k.id], color: k.color }))
+      : V.TENSES.map(t => ({ id: t.id, label: t.label, short: TENSE_SHORT[t.id], color: TENSE_COLOR[t.id] }));
+    const tenseBars = cats.map(t => ({ segs: [{ v: perTense[t.id] || 0, c: t.color }], name: t.short,
       tip: `${t.label}: ${fmtNum(perTense[t.id] || 0)} ${perTense[t.id] === 1 ? 'question' : 'questions'}` }));
     const empty = !ev.length;
     const node = el(`
@@ -1728,14 +2108,14 @@
             <button class="tile" data-to="review">
               <span class="t-chev">${ICON.chev}</span>
               <div class="t-num">${fmtNum(st.forms)}</div>
-              <div class="t-label">Verb forms studied</div>
+              <div class="t-label">${nd ? 'Noun forms studied' : 'Verb forms studied'}</div>
               <div class="t-note">${fmtNum(st.answered)} ${st.answered === 1 ? 'question' : 'questions'} answered · see In Review</div>
             </button>
             <button class="tile" data-to="learned">
               <span class="t-chev">${ICON.chev}</span>
               <div class="t-num">${fmtNum(st.complete)}</div>
-              <div class="t-label">Complete verbs learnt</div>
-              <div class="t-note">every form, in all ${V.TENSES.length} tenses · see Learned</div>
+              <div class="t-label">${nd ? 'Complete nouns learnt' : 'Complete verbs learnt'}</div>
+              <div class="t-note">${nd ? 'every form: singular, plural, feminine' : `every form, in all ${V.TENSES.length} tenses`} · see Learned</div>
             </button>
             <button class="tile" data-to="incorrect">
               <span class="t-chev">${ICON.chev}</span>
@@ -1753,7 +2133,7 @@
           </section>
 
           <section class="chart" data-chart="tenses">
-            <h2 class="chart-h">Questions by tense</h2>
+            <h2 class="chart-h">${nd ? 'Questions by determiner' : 'Questions by tense'}</h2>
             ${barChart(tenseBars, { xLabel: b => b.name, rotate: true, values: true, h: 230 })}
             <p class="chart-cap muted"></p>
           </section>
@@ -1764,7 +2144,7 @@
     $$('[data-to]', node).forEach(b => b.onclick = () => { listKey = b.dataset.to; listSearch = ''; listFrom = 'progress'; go('list'); });
     const total = st.answered;
     wireChart($('[data-chart="days"]', node), dayBars, empty ? 'No questions answered yet.' : `Tap a bar to see that ${unitWord}. ${fmtNum(total)} answered in all.`);
-    wireChart($('[data-chart="tenses"]', node), tenseBars, empty ? 'No questions answered yet.' : 'Tap a bar to see that tense.');
+    wireChart($('[data-chart="tenses"]', node), tenseBars, empty ? 'No questions answered yet.' : nd ? 'Tap a bar to see that determiner.' : 'Tap a bar to see that tense.');
     return node;
   }
 
@@ -1776,6 +2156,9 @@
     if (!window.Verbs) out.push('verbs.js');
     if (!window.Sentences) out.push('sentences.js');
     if (!window.GUIDE) out.push('guide.js');
+    if (!window.NOUN_DATA) out.push('nouns-data.js');
+    if (!window.Nouns) out.push('nouns.js');
+    if (window.GUIDE && !window.GUIDE.nouns) out.push('guide.js (an older version is on the site)');
     if (window.Verbs && window.Verbs.VERBS.length && !window.Verbs.VERBS.some(v => v.pats)) out.push('verbs-data.js (an older version is on the site)');
     return out;
   }
@@ -1801,4 +2184,5 @@
   }
   render();
   setTimeout(loadDefs, 1500); // meanings load quietly once the app is up
+  setTimeout(loadNDefs, 2500);
 })();

@@ -1,0 +1,23 @@
+Nouns: nouns-data.js and noun-defs.js
+
+1. Which nouns, and how frequent they are
+   Source: Lexique 3.83, http://www.lexique.org — New, Pallier et al.
+   ("Lexique 2: A New French Lexical Database", Behavior Research Methods 36(3), 2004).
+   Licence: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0),
+            https://creativecommons.org/licenses/by-sa/4.0/
+   Used: the lemma frequencies of nouns (films and books), to rank the nouns and make the
+         Common (1–500), Frequent (501–2,000) and Less Common (2,001–5,000) groups.
+
+2. Gender, plurals, feminine forms, meanings and examples
+   Source: the English Wiktionary, https://en.wiktionary.org, by Wiktionary contributors,
+           extracted with Wiktextract (https://kaikki.org, Tatu Ylonen, LREC 2022).
+   Licence: CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/
+
+Changes made for this app: only nouns among the 5,000 most frequent are kept; for the most frequent
+nouns, the short English meanings, which nouns take du/de la, and a few feminine forms were corrected
+by hand (tools/noun_fixes.txt); usage labels come from each sense's qualifiers; at most three short
+example sentences are kept per sense. The wording of the meanings and examples on the Meanings
+screens is unchanged.
+
+nouns-data.js and noun-defs.js are adapted from these works and are shared under the same licence,
+CC BY-SA 4.0, provided as is, without warranties. The app's code is under the MIT License (LICENSE).

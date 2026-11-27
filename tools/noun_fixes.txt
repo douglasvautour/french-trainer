@@ -1,0 +1,494 @@
+# Hand corrections for the most frequent nouns.
+# id | English (singular) | English plural (blank = automatic) | flags
+# flags: skip (not a quiz noun), mass (takes du/de la/de l'), count (never du/de la), nopl (no plural questions),
+#        nofem (no feminine form), noperson (gender never changes), g=m / g=f (force gender), fem=form/plural
+temps | time | times | mass
+fois | time (occasion) | times (occasions) |
+vie | life | lives | count
+coup | blow | |
+dieu | god | | nofem
+monsieur | gentleman | gentlemen |
+madame | | | skip
+mademoiselle | | | skip
+gens | people | people |
+accord | agreement | |
+amour | love | | g=m noperson
+fait | fact | |
+argent | money | | mass nopl
+chambre | bedroom | |
+maman | mum | |
+affaire | matter | |
+peine | trouble | |
+suite | continuation | |
+bout | tip | |
+fin | end | |
+mal | harm | harms |
+type | guy | |
+mec | guy (informal) | guys (informal) |
+place | square | |
+endroit | spot | |
+lieu | location | locations |
+fond | bottom | |
+regard | gaze | | count
+envie | urge | |
+feu | fire | | mass
+pas | step | |
+marche | walk | |
+escalier | staircase | |
+pays | country | countries |
+pièce | room | |
+salle | hall | |
+chef | chief | | nofem
+patron | boss | bosses |
+cheveu | hair | hair |
+esprit | mind | |
+journée | whole day | whole days |
+jour | day | |
+gars | lad | |
+parent | parent | | nofem
+cours | lesson | |
+classe | class (group) | classes (groups) |
+bureau | office | |
+dos | back | backs |
+journal | newspaper | |
+bord | edge | |
+coin | corner | |
+hôtel | hotel | |
+rapport | report | |
+genre | kind | |
+espèce | species | species |
+sorte | sort | |
+fête | party | parties |
+parti | political party | political parties |
+bonheur | happiness | | nopl
+plan | plan | |
+gueule | | | skip
+merde | | | skip
+cul | | | skip
+salaud | | | skip
+petit | | | skip
+grand | | | skip
+premier | | | skip
+vieux | | | skip
+noir | | | skip
+bas | | | skip
+long | | | skip
+haut | | | skip
+présent | | | skip
+travers | | | skip
+propos | | | skip
+bon | | | skip
+bien | | | skip
+être | | | skip
+chéri | | | skip
+fou | | | skip
+arrière | | | skip
+vacance | | | skip
+face | | | skip
+avance | | | skip
+aide | help | | g=f noperson nopl
+pouvoir | power | |
+peuple | nation | |
+garde | guard | |
+bateau | boat | |
+époque | era | eras |
+avion | plane | |
+gauche | left side | |
+droite | right side | | count
+droit | right | |
+cri | shout | | count
+passage | passage | | count
+sol | ground | |
+terrain | plot of land | plots of land |
+champ | field | |
+réponse | answer | |
+langue | language | |
+moyen | means | means |
+contraire | opposite | |
+bête | beast | |
+camarade | comrade | |
+poste | post office | | count
+retard | delay | |
+hasard | coincidence | coincidences |
+chance | luck | | mass nopl
+conseil | piece of advice | pieces of advice |
+objet | object | |
+clé | key | |
+occasion | opportunity | opportunities |
+entrée | entrance | |
+fil | thread | |
+calme | calm | | nopl
+campagne | countryside | | nopl
+glace | ice | | mass
+course | race | |
+crime | crime | |
+billet | ticket | |
+côte | coast | |
+rendez-vous | appointment | |
+centre | centre | |
+tableau | painting | |
+but | goal | |
+condition | condition | |
+ferme | farm | |
+fric | cash (informal) | | mass nopl
+radio | radio | | g=f noperson
+est | east | | nopl count
+nord | north | | nopl
+gamin | youngster | |
+gosse | kid | |
+dossier | file | |
+souffle | breath | |
+adresse | address | addresses |
+toile | canvas | canvases |
+gare | station | |
+foi | faith | | nopl
+lune | moon | |
+enfer | hell | | nopl
+vol | flight | |
+expérience | experience | | count
+soirée | evening (whole) | evenings (whole) |
+soir | evening | |
+seconde | second | |
+numéro | number | |
+or | gold | | mass nopl
+boulot | job | |
+métier | trade | |
+prix | price | |
+sentiment | feeling | |
+vue | view | |
+manière | manner | |
+façon | way | |
+voie | lane | |
+honneur | honour | |
+intérieur | inside | |
+président | president | |
+médecin | doctor | | noperson g=m
+docteur | doctor (title) | doctors (title) | nofem
+seigneur | lord | | nofem
+balle | ball | |
+bateau | boat | |
+cadeau | gift | |
+erreur | mistake | |
+faute | fault | |
+tort | wrong | |
+appartement | apartment | |
+souvenir | memory (recollection) | memories (recollections) |
+mémoire | memory | memories |
+compagnie | company | companies |
+société | society | societies |
+douleur | pain | |
+morceau | piece | |
+espoir | hope | | g=m noperson nofem
+agent | agent | | nofem
+sécurité | safety | | nopl
+vêtement | piece of clothing | clothes |
+bande | gang | |
+malheur | misfortune | |
+tas | pile | |
+étage | floor | |
+salon | living room | |
+combat | fight | |
+œuvre | work of art | works of art |
+travail | work | works | mass
+paquet | packet | |
+télé | TV | TVs |
+recherche | research | | nopl
+copain | pal | |
+victime | victim | | noperson
+personne | person | people | noperson
+capitaine | captain | |
+soldat | soldier | | nofem
+colonel | colonel | | nofem
+lieutenant | lieutenant | | nofem
+officier | officer | | nofem
+professeur | teacher | | nofem
+oiseau | bird | | nofem
+chat | cat | | nofem
+général | general | | nofem
+seigneur | lord | | nofem
+maître | master | |
+héros | hero | heroes |
+étranger | foreigner | |
+ennemi | enemy | enemies |
+français | French (language) | | nopl
+anglais | English (language) | | nopl
+allemand | German (language) | | nopl
+terre | earth | | mass
+histoire | story | stories |
+ville | town | |
+force | strength | | mass
+ciel | sky | skies |
+pied | foot | feet |
+dent | tooth | teeth |
+enfant | child | children |
+femme | woman | women |
+homme | man | men |
+bébé | baby | babies |
+pierre | stone | | count
+verre | glass | glasses | count
+mer | sea | | count
+vent | wind | | mass
+bois | wood | woods | mass
+café | coffee | | mass
+musique | music | | mass nopl
+attention | attention | | nopl
+sang | blood | | mass nopl
+eau | water | | mass
+air | air | | mass
+pain | bread | | mass
+vin | wine | | mass
+fer | iron | | mass nopl
+courage | courage | | mass nopl
+confiance | trust | | mass nopl
+paix | peace | | nopl
+peur | fear | | mass
+faim | hunger | | nopl
+santé | health | | nopl
+sommeil | sleep | | nopl
+chaleur | heat | | mass nopl
+enfance | childhood | | nopl
+importance | importance | | mass nopl
+pitié | pity | | nopl
+honte | shame | | mass nopl
+colère | anger | | nopl
+beauté | beauty | |
+nature | nature | | nopl
+liberté | freedom | |
+ennui | boredom | | nopl
+herbe | grass | | mass
+pluie | rain | | mass
+lumière | light | | mass
+bruit | noise | | mass
+papier | paper | | mass
+soleil | sun | | mass
+monde | world | |
+silence | silence | | mass
+plaisir | pleasure | | mass
+poisson | fish | fish | mass
+chair | flesh | | nopl
+réalité | reality | realities | count
+rire | laugh | |
+été | summer | |
+hiver | winter | |
+lendemain | next day | |
+quartier | neighbourhood | |
+passé | past | | nopl
+avenir | future | | nopl
+rôle | role | |
+choix | choice | |
+art | art | |
+phrase | sentence | |
+désir | desire | |
+cou | neck | |
+dîner | dinner | |
+joue | cheek | |
+moitié | half | halves |
+direction | direction | |
+victime | victim | | noperson
+diable | devil | |
+détail | detail | |
+cinéma | cinema | |
+soin | care | |
+projet | project | |
+voisin | neighbour | |
+marché | market | |
+étoile | star | |
+troupe | troop | |
+danger | danger | |
+chemise | shirt | |
+plage | beach | beaches |
+mission | mission | |
+espace | space | |
+opération | operation | |
+chanson | song | |
+poitrine | chest | chests |
+chaussure | shoe | |
+règle | rule | |
+spectacle | show | |
+sein | breast | |
+bar | bar | |
+relation | relationship | |
+conscience | conscience | |
+maladie | illness | illnesses |
+magasin | shop | |
+repas | meal | |
+position | position | |
+pomme | apple | |
+système | system | |
+poids | weight | |
+sortie | exit | |
+idée | idea | |
+voiture | car | |
+visage | face | |
+famille | family | families |
+cœur | heart | |
+mot | word | |
+parole | spoken word | spoken words |
+raison | reason | |
+voix | voice | |
+corps | body | bodies |
+fils | son | |
+rue | street | |
+question | question | |
+porte | door | |
+mort | death | |
+nom | name | |
+besoin | need | |
+côté | side | |
+heure | hour | |
+an | year | |
+année | year (whole) | years (whole) |
+point | point | |
+image | picture | |
+forme | shape | |
+ombre | shadow | |
+peau | skin | |
+voyage | trip | |
+dame | lady | ladies |
+couleur | colour | |
+téléphone | phone | |
+carte | card | |
+début | beginning | |
+sourire | smile | |
+mariage | wedding | |
+odeur | smell | |
+signe | sign | |
+impression | impression | |
+robe | dress | dresses |
+groupe | group | |
+sujet | subject | |
+église | church | churches |
+pensée | thought | |
+prince | prince | |
+goût | taste | |
+ton | tone | |
+secret | secret | |
+visite | visit | |
+trou | hole | |
+poche | pocket | |
+tante | aunt | |
+gouvernement | government | |
+client | customer | |
+départ | departure | |
+ventre | belly | bellies |
+hôpital | hospital | |
+loi | law | |
+genou | knee | |
+présence | presence | |
+cigarette | cigarette | |
+effort | effort | |
+larme | tear | |
+siècle | century | centuries |
+intérêt | interest | |
+appel | call | |
+mètre | metre | |
+preuve | proof | |
+grand-père | grandfather | |
+grand-mère | grandmother | |
+feuille | leaf | leaves |
+île | island | |
+dimanche | Sunday | |
+mesure | measure | |
+équipe | team | |
+cousin | cousin | |
+animal | animal | |
+professeur | teacher | | nofem
+bouteille | bottle | |
+surprise | surprise | |
+message | message | |
+chaise | chair | |
+bain | bath | |
+conversation | conversation | |
+nature | nature | | nopl
+page | page | |
+accident | accident | |
+machine | machine | |
+dollar | dollar | |
+avocat | lawyer | |
+forêt | forest | |
+pont | bridge | |
+montagne | mountain | |
+chapeau | hat | |
+courage | courage | | mass nopl
+toit | roof | |
+trace | trace | |
+note | note | |
+foule | crowd | |
+contact | contact | |
+couloir | corridor | |
+importance | importance | | mass nopl
+action | action | |
+village | village | |
+jardin | garden | |
+armée | army | armies |
+paix | peace | | nopl
+ligne | line | |
+habitude | habit | |
+nez | nose | noses |
+oncle | uncle | |
+lettre | letter | |
+lit | bed | |
+arme | weapon | |
+milieu | middle | |
+épaule | shoulder | |
+effet | effect | |
+photo | photo | |
+sac | bag | |
+retour | return | |
+âme | soul | |
+arbre | tree | |
+rêve | dream | |
+oreille | ear | |
+fleur | flower | |
+lèvre | lip | |
+chien | dog | |
+mur | wall | |
+partie | part | |
+reste | rest | |
+bouche | mouth | mouths |
+fenêtre | window | |
+âge | age | |
+compte | account | |
+état | state | |
+jeu | game | |
+police | police | police | nopl
+chemin | path | |
+école | school | |
+sœur | sister | |
+doigt | finger | |
+sens | meaning | |
+jambe | leg | |
+vérité | truth | |
+service | service | |
+film | film | |
+papier | paper | | mass
+cheval | horse | |
+âge | age | |
+table | table | |
+cas | case | |
+semaine | week | |
+livre | book | |
+route | road | |
+ordre | order | |
+cause | cause | |
+plaisir | pleasure | | mass
+garçon | boy | |
+minute | minute | |
+instant | instant | |
+train | train | |
+guerre | war | |
+frère | brother | |
+problème | problem | |
+mois | month | |
+bras | arm | |
+main | hand | |
+œil | eye | eyes |
+père | father | |
+mère | mother | |
+fille | girl | |
+tête | head | |
+nuit | night | |
+maison | house | |
+moment | moment | |
+ami | friend | |
+chose | thing | |

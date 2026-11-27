@@ -113,3 +113,125 @@ window.GUIDE = {
     },
   ],
 };
+
+/* Nouns & Determiners module */
+window.GUIDE.nouns = [
+  {
+    id: 'plural', title: 'Making nouns plural',
+    use: 'Most nouns add -s. The -s (or -x) is usually silent, so in speech the determiner (les, des, mes…) is what tells you it’s plural.',
+    rules: [
+      ['Most nouns: add -s', 'un livre → des livres'],
+      ['-s, -x, -z: no change', 'un bras → des bras · une voix → des voix · un nez → des nez'],
+      ['-eau, -au, -eu: add -x', 'un bateau → des bateaux · un jeu → des jeux (but des pneus, des bleus)'],
+      ['-al: becomes -aux', 'un cheval → des chevaux (but des bals, des festivals, des carnavals)'],
+      ['-ou: add -s', 'un trou → des trous, except seven that take -x: bijoux, cailloux, choux, genoux, hiboux, joujoux, poux'],
+      ['-ail: add -s', 'un détail → des détails (but un travail → des travaux, un vitrail → des vitraux)'],
+      ['Irregular', 'un œil → des yeux · monsieur → messieurs · madame → mesdames · le ciel → les cieux'],
+      ['Compound nouns', 'un grand-père → des grands-pères · un rendez-vous → des rendez-vous'],
+    ],
+    ex: [['Les chevaux sont dans le champ.', 'The horses are in the field.'], ['J’ai mal aux yeux.', 'My eyes hurt.']],
+  },
+  {
+    id: 'gender', title: 'Guessing the gender from the ending',
+    use: 'Every noun is masculine or feminine, and no rule covers them all, so it’s best to learn each noun with its determiner (un livre, une table). Endings are a good guide, though.',
+    rules: [
+      ['Usually masculine', '-age (le voyage), -ment (le moment), -eau (le bateau), -isme (le tourisme), -oir (le miroir), -et (le jouet), -ier (le cahier), -al (le journal), -in (le jardin), -o (le vélo)'],
+      ['Exceptions', 'la page, la plage, l’image, la cage · l’eau, la peau · la fin, la main · la photo, la radio, la moto'],
+      ['Usually feminine', '-tion / -sion (la nation), -té (la liberté), -ure (la voiture), -ette (la baguette), -ance / -ence (la chance), -ie (la vie), -ée (l’année), -ade (la salade), -ude (l’habitude), -esse (la jeunesse), -ise (la surprise)'],
+      ['Exceptions', 'l’été, le côté · le silence · le génie, l’incendie · le musée, le lycée · l’avion, le camion · le squelette'],
+      ['-eur', 'qualities are feminine (la peur, la couleur, la chaleur) but le bonheur, le malheur, l’honneur; people and machines are masculine (le docteur, le moteur)'],
+      ['Always masculine', 'days, months and seasons (le lundi, le printemps), languages (le français), trees, metals and colours (le rouge)'],
+    ],
+    ex: [['Le fromage et la viande', 'Cheese and meat'], ['Une décision importante', 'An important decision']],
+  },
+  {
+    id: 'people', title: 'Nouns for people: when the gender changes',
+    use: 'For people, the noun usually follows the person’s gender, in one of three ways.',
+    rules: [
+      ['The word changes', 'ami → amie, cousin → cousine · -eur → -euse (vendeur, vendeuse) · -teur → -trice (acteur, actrice) · -er → -ère (boulanger, boulangère) · -ien → -ienne (musicien, musicienne) · -on → -onne (patron, patronne) · -e → -esse (prince, princesse)'],
+      ['Different words', 'homme / femme · frère / sœur · oncle / tante · roi / reine · neveu / nièce'],
+      ['Only the determiner changes', 'un / une élève · un / une enfant · un / une journaliste · un / une collègue · un / une touriste (many end in -e)'],
+      ['The gender never changes', 'une personne, une victime, une vedette, une star (even for a man) · un témoin, un bébé, un individu, un génie (even for a woman)'],
+      ['Animals', 'many have one gender for both sexes (une souris, une girafe, un serpent); some have pairs (chien / chienne, lion / lionne) or two words (cheval / jument)'],
+    ],
+    ex: [['Mon voisin est boulanger ; sa femme est boulangère aussi.', 'My neighbour is a baker; his wife is a baker too.'], ['C’est une personne très gentille.', 'He’s (or she’s) a very kind person.']],
+  },
+  {
+    id: 'two', title: 'Same word, two genders, two meanings',
+    use: 'A few nouns mean something different in the masculine and the feminine. The app treats them as separate nouns.',
+    rules: [
+      ['le livre / la livre', 'book / pound'],
+      ['le tour / la tour', 'turn, trip / tower'],
+      ['le poste / la poste', 'job, set (TV) / post office'],
+      ['le mode / la mode', 'method, mood / fashion'],
+      ['le voile / la voile', 'veil / sail'],
+      ['le manche / la manche', 'handle / sleeve'],
+      ['le mémoire / la mémoire', 'dissertation / memory'],
+    ],
+    ex: [['Il habite près de la tour Eiffel.', 'He lives near the Eiffel Tower.'], ['On fait un tour ?', 'Shall we go for a walk?']],
+  },
+  {
+    id: 'other', title: 'Other useful things to know',
+    use: 'A few more patterns that come up often.',
+    rules: [
+      ['Only plural', 'les gens (people), les vacances (holidays), les fiançailles, les environs · some change meaning: une vacance (a vacancy) / les vacances'],
+      ['Aspirated h', 'some words starting with h behave as if they started with a consonant: le héros, la haine, le hasard, la honte, le haricot (no l’, no liaison). Most are silent: l’homme, l’heure, l’hôtel'],
+      ['Capitals', 'people from a country take a capital, languages and adjectives don’t: un Français parle français'],
+      ['Nouns after numbers', 'there’s no extra word for “of”: trois livres, mille euros, but un million de personnes'],
+    ],
+    ex: [['Les gens sont partis en vacances.', 'People have gone on holiday.'], ['Le héros est arrivé à l’heure.', 'The hero arrived on time.']],
+  },
+];
+window.GUIDE.dets = [
+  {
+    id: 'def', title: 'Definite articles', list: 'le, la, l’, les',
+    use: '“The”, for something specific. French also uses them for things in general, where English uses no article: J’aime le café (I like coffee). Also for languages, countries, body parts and habits on days of the week (le lundi = on Mondays).',
+    rules: [
+      ['Before a vowel or silent h', 'le / la → l’: l’école, l’homme (but le héros, with an aspirated h)'],
+      ['à and de join with le and les', 'à + le = au, à + les = aux · de + le = du, de + les = des (au cinéma, le livre du professeur)'],
+    ],
+    ex: [['Le livre est sur la table.', 'The book is on the table.'], ['J’aime le chocolat.', 'I like chocolate.'], ['Elle a mal à la tête.', 'She has a headache.']],
+  },
+  {
+    id: 'ind', title: 'Indefinite articles', list: 'un, une, des',
+    use: '“A” or “an”, and des for more than one, where English often uses “some” or nothing at all: J’ai des amis (I have friends).',
+    rules: [
+      ['After a negative', 'un, une, des → de (d’): Je n’ai pas de voiture (but with être they stay: Ce n’est pas une voiture)'],
+      ['Before a plural adjective', 'des → de when the adjective comes first, in careful French: de beaux jours, de grandes maisons'],
+      ['Jobs after être', 'no article: Elle est médecin (but C’est un bon médecin)'],
+    ],
+    ex: [['Il y a un chat dans le jardin.', 'There’s a cat in the garden.'], ['Je n’ai pas de frère.', 'I don’t have a brother.']],
+  },
+  {
+    id: 'part', title: 'Partitive articles', list: 'du, de la, de l’',
+    use: '“Some” or “any”, often nothing in English, for an amount of something you don’t count: food and drink (du pain, de l’eau), materials, and things like courage or patience. Common after manger, boire, vouloir, acheter, avoir, il y a, and faire du sport.',
+    rules: [
+      ['Before a vowel or silent h', 'du / de la → de l’: de l’eau, de l’argent'],
+      ['After a negative', '→ de (d’): Je ne bois pas de café · Il n’y a plus d’eau'],
+      ['With amounts', '→ de: beaucoup de pain, un verre d’eau, un peu de sel, assez d’argent'],
+      ['Likes and dislikes', 'aimer, adorer, préférer, détester talk about things in general, so they take le / la: J’aime le pain (but Je mange du pain)'],
+    ],
+    ex: [['Tu veux du café ?', 'Do you want some coffee?'], ['Il faut de la patience.', 'It takes patience.'], ['Je ne mange pas de viande.', 'I don’t eat meat.']],
+  },
+  {
+    id: 'pos', title: 'Possessive determiners', list: 'mon, ma, mes · ton, ta, tes · son, sa, ses · notre, nos · votre, vos · leur, leurs',
+    use: '“My, your, his, her, our, their.” The determiner agrees with the thing owned, not the owner: son père and sa mère can both mean his or her father and mother.',
+    rules: [
+      ['je', 'mon (m.) · ma (f.) · mes (pl.)'], ['tu', 'ton · ta · tes'], ['il, elle, on', 'son · sa · ses'],
+      ['nous', 'notre · nos'], ['vous', 'votre · vos'], ['ils, elles', 'leur · leurs'],
+      ['Before a vowel or silent h', 'ma, ta, sa → mon, ton, son even for feminine nouns: mon amie, son école, ton histoire'],
+      ['Body parts', 'with a reflexive verb, use le / la / les instead: Je me lave les mains (not mes mains)'],
+    ],
+    ex: [['Sa voiture est rouge.', 'His (or her) car is red.'], ['Mon amie Claire arrive demain.', 'My friend Claire arrives tomorrow.']],
+  },
+  {
+    id: 'dem', title: 'Demonstrative determiners', list: 'ce, cet, cette, ces',
+    use: '“This, that, these, those.” French uses the same word for “this” and “that”.',
+    rules: [
+      ['ce', 'masculine: ce livre'], ['cet', 'masculine before a vowel or silent h: cet homme, cet arbre (but ce héros)'],
+      ['cette', 'feminine: cette maison'], ['ces', 'plural: ces livres, ces maisons'],
+      ['-ci and -là', 'add them to the noun to make the difference: ce livre-ci (this book) / ce livre-là (that book)'],
+    ],
+    ex: [['Cet hôtel est trop cher.', 'This hotel is too expensive.'], ['Tu préfères cette robe-ci ou cette robe-là ?', 'Do you prefer this dress or that one?']],
+  },
+];
