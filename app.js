@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '20';
+  const APP_VERSION = '21';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -53,7 +53,8 @@
     }
     if (ok) { refresh(); speechSynthesis.addEventListener ? speechSynthesis.addEventListener('voiceschanged', refresh) : (speechSynthesis.onvoiceschanged = refresh); setTimeout(refresh, 700); setTimeout(refresh, 2500); }
     else document.documentElement.classList.add('no-audio');
-    const current = () => voices.find(v => v.voiceURI === appSet.voice) || voices[0] || null;
+    // 'system': don't name a voice, so the device uses its own default French voice (on iPhone, the one ticked in Read & Speak)
+    const current = () => (appSet.voice === 'system' ? null : voices.find(v => v.voiceURI === appSet.voice) || voices[0] || null);
     let token = 0;
     const clear = () => $$('.speaking').forEach(e => e.classList.remove('speaking'));
     function stop() { token++; clear(); if (ok && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel(); }
@@ -1372,17 +1373,22 @@
     const sel = $('.voice-sel', node), note = $('.voice-note', node);
     const fill = () => {
       const vs = Speech.list(), cur = Speech.current();
-      sel.innerHTML = vs.length ? vs.map((v, i) => `<option value="${i}"${v === cur ? ' selected' : ''}>${esc(v.name.replace(/\s*\((Enhanced|Premium|Natural)\)/i, ''))} · ${Speech.quality(v)[0]} · ${esc(v.lang.replace('_', '-'))}</option>`).join('')
+      sel.innerHTML = vs.length ? `<option value="system"${appSet.voice === 'system' ? ' selected' : ''}>Device default for French</option>` + vs.map((v, i) => `<option value="${i}"${v === cur ? ' selected' : ''}>${esc(v.name.replace(/\s*\((Enhanced|Premium|Natural)\)/i, ''))} · ${Speech.quality(v)[0]} · ${esc(v.lang.replace('_', '-'))}</option>`).join('')
         : `<option>${Speech.ok ? 'No French voice on this device yet' : 'This browser can’t speak'}</option>`;
       sel.disabled = !vs.length;
       note.textContent = !vs.length ? 'Audio is switched off until a French voice is installed. See Better Voices below.'
+        : !cur ? 'Uses the French voice chosen in your device’s own settings. On iPhone: Settings → Accessibility → Read & Speak → Voices → French.'
         : Speech.quality(cur)[1] < 40 ? 'This is a basic voice. See Better Voices below for a more natural one.' : 'The app picks the best French voice on this device. You can choose another one here.';
     };
     let stale = false;
     fill();
     Speech.onChange(() => { if (view !== 'appsettings') return; if (document.activeElement === sel) stale = true; else fill(); });
     sel.addEventListener('blur', () => { if (stale) { stale = false; fill(); } });
-    sel.onchange = () => { const v = Speech.list()[+sel.value]; if (!v) return; appSet.voice = v.voiceURI; saveApp(); fill(); Speech.say([['Bonjour !', null]]); };
+    sel.onchange = () => {
+      if (sel.value === 'system') appSet.voice = 'system';
+      else { const v = Speech.list()[+sel.value]; if (!v) return; appSet.voice = v.voiceURI; }
+      saveApp(); fill(); Speech.say([['Bonjour !', null]]);
+    };
     const segs = $$('.seg-b', node);
     const paintSeg = () => segs.forEach(b => { const on = +b.dataset.rate === (appSet.rate || 1); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
     segs.forEach(b => b.onclick = () => { appSet.rate = +b.dataset.rate; saveApp(); paintSeg(); Speech.say([['Je parle à cette vitesse.', null]]); });
