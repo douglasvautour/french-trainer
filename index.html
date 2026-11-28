@@ -446,6 +446,50 @@ abbr.ptag { text-decoration: none; border: 0; cursor: default; }
 h3 .lvl, .gd h3 .lvl { font-size: 11px; vertical-align: 3px; }
 .src-sub { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); margin: 18px 0 6px; }
 .src-sub .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* ---- Audio ---- */
+.spk { display: inline-grid; place-items: center; width: .5em; height: .5em; min-width: 18px; min-height: 18px; vertical-align: .55em; margin-left: .14em; padding: 0; color: var(--ink); position: relative; transition: color .2s; }
+.spk::after { content: ''; position: absolute; inset: -12px; }
+.spk svg { width: 100%; height: 100%; }
+.spk.good { color: var(--good); } .spk.bad { color: var(--bad); }
+.vq-inf .spk { width: 20px; height: 20px; vertical-align: .5em; }
+.verb-title .spk { width: 19px; height: 19px; vertical-align: .5em; }
+.q-text .spk { width: 20px; height: 20px; vertical-align: .6em; }
+.q-text .nslot.ws ~ .spk { vertical-align: .15em; }
+.say, .say-q { cursor: pointer; border-radius: 6px; transition: background .2s; }
+.say.speaking, .say-q.speaking { background: var(--accent-soft); }
+.vrow.say { padding: 0 2px; margin: 0 -2px; }
+.tap-hint { font-size: 12.5px; color: var(--muted); margin: -2px 0 6px; }
+.spk-inline { display: inline-block; width: 15px; height: 15px; vertical-align: -3px; color: var(--ink); }
+.spk-inline svg { width: 100%; height: 100%; }
+.no-voice { display: none; color: var(--warn); }
+.no-audio .no-voice { display: inline; }
+.no-audio .spk, .no-audio .tap-hint { display: none; }
+.no-audio .say { cursor: auto; }
+.nsep { margin: 0 -.05em; }
+.nslot.ws { min-width: 1.9em; margin: 0 .06em; }
+.q-text .nslot.ws { min-width: 1.9em; }
+.home-head { position: relative; }
+.home-gear { position: absolute; right: -10px; top: -12px; }
+/* app settings */
+.sel-wrap { position: relative; }
+.voice-sel { width: 100%; font: inherit; font-size: 16px; padding: 12px 36px 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); -webkit-appearance: none; appearance: none; }
+.sel-wrap::after { content: '▾'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.seg { display: inline-flex; background: var(--soft); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg-b { padding: 8px 22px; border-radius: 9px; font-size: 14.5px; color: var(--ink-2); }
+.seg-b.on { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.test-btn { gap: 8px; margin-top: 18px; width: 100%; }
+.test-btn svg { width: 20px; height: 20px; }
+.how-to { border-top: 1px solid var(--line); padding: 12px 0; }
+.how-to:last-child { border-bottom: 1px solid var(--line); }
+.how-to summary { font-weight: 600; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+.how-to summary::-webkit-details-marker { display: none; }
+.how-to summary::before { content: '›'; display: inline-block; width: 14px; color: var(--muted); transition: transform .2s; font-size: 20px; line-height: 1; }
+.how-to[open] summary::before { transform: rotate(90deg); }
+.how-to summary .muted { font-weight: 400; font-size: 13px; }
+.how-to ol { margin: 10px 0 4px; padding-left: 22px; font-size: 14.5px; }
+.how-to li { margin: 6px 0; }
+.small { font-size: 12.5px; }
 </style>
 </head>
 <body>

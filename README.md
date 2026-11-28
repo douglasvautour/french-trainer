@@ -52,7 +52,12 @@ and `python3 tools/extract_defs.py kaikki.org-dictionary-French-by-pos-verb.json
 Then run `python3 tools/build.py`, which rewrites `verbs-data.js`.
 
 ## Backups
-Settings → Backup → **Save Backup** opens the iPhone share sheet; choose **Save to Files** (e.g. iCloud Drive). **Restore Backup** reads that file back in and replaces the current data.
+
+Settings on the home screen (the gear icon) → **Save Backup** saves all three modules in one .zip and opens the iPhone share sheet: choose **Save to Files** (e.g. iCloud Drive). **Restore Backup** takes that .zip or one module's .json file.
+
+## Audio
+
+Audio uses the device's own French voice (the browser's Web Speech API), so there are no sound files. The app picks the best French voice it finds; you can choose another and the speed under Settings on the home screen, which also explains how to download better voices on iPhone, Mac, Windows and Android. Without a French voice, the speakers are hidden and Audio questions become ordinary French questions.
 
 ## Credits and licences
 - **App code** (`index.html`, `app.js`, `verbs.js`, `sw.js`, `tools/*.py`) and the **English glosses and lists** in `tools/`: MIT License (see `LICENSE`).

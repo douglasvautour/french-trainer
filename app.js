@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '18';
+  const APP_VERSION = '19';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -24,6 +24,65 @@
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const DAY = 864e5;
 
+
+  /* ---------------- Audio: the device's own French voice (Web Speech API) ---------------- */
+  const KEY_APP = 'apprenez.app.v1'; // app-wide settings: voice and speed
+  const appSet = Object.assign({ voice: null, rate: 1 }, (() => { try { return JSON.parse(localStorage.getItem(KEY_APP)) || {}; } catch (e) { return {}; } })());
+  const saveApp = () => { try { localStorage.setItem(KEY_APP, JSON.stringify(appSet)); } catch (e) { /* ignore */ } };
+  const Speech = (() => {
+    const ok = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    // novelty voices (Apple's Bells, Bubbles…) are left out
+    const NOVELTY = /\b(Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley|Jacques|Bad News|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Albert|Bahh|Fred|Junior|Kathy|Ralph)\b/i;
+    let voices = [];
+    const quality = v => { const t = (v.name + ' ' + v.voiceURI).toLowerCase();
+      return t.includes('premium') ? ['Premium', 50] : t.includes('natural') ? ['Natural', 45] : t.includes('enhanced') ? ['Enhanced', 40] : t.includes('google') ? ['Google', 30] : ['Standard', 10]; };
+    const score = v => quality(v)[1] + (/^fr[-_]FR/i.test(v.lang) ? 8 : /^fr[-_]CA/i.test(v.lang) ? 2 : 0) + (v.localService ? 1 : 0);
+    const listeners = [];
+    function refresh() {
+      if (!ok) return;
+      voices = speechSynthesis.getVoices().filter(v => /^fr/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a, b) => score(b) - score(a));
+      document.documentElement.classList.toggle('no-audio', !voices.length);
+      listeners.forEach(f => f());
+    }
+    if (ok) { refresh(); speechSynthesis.addEventListener ? speechSynthesis.addEventListener('voiceschanged', refresh) : (speechSynthesis.onvoiceschanged = refresh); setTimeout(refresh, 700); setTimeout(refresh, 2500); }
+    else document.documentElement.classList.add('no-audio');
+    const current = () => voices.find(v => v.voiceURI === appSet.voice) || voices[0] || null;
+    let token = 0;
+    const clear = () => $$('.speaking').forEach(e => e.classList.remove('speaking'));
+    function stop() { token++; clear(); if (ok && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel(); }
+    // items: [[text, elementToHighlight], …], spoken one after another
+    function say(items) {
+      if (!ok || !items.length) return;
+      const voice = current();
+      const busy = speechSynthesis.speaking || speechSynthesis.pending;
+      stop();
+      const my = token;
+      const run = () => items.forEach(([text, elx]) => {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = voice ? voice.lang.replace('_', '-') : 'fr-FR';
+        if (voice) u.voice = voice;
+        u.rate = appSet.rate || 1;
+        u.onstart = () => { if (my === token) { clear(); if (elx) elx.classList.add('speaking'); } };
+        u.onend = u.onerror = () => { if (elx) elx.classList.remove('speaking'); };
+        speechSynthesis.speak(u);
+      });
+      // Safari can drop speech that starts right after a cancel; the first tap must speak at once
+      if (busy) setTimeout(run, 80); else run();
+    }
+    return { ok, say, stop, current, quality, list: () => voices, has: () => voices.length > 0, onChange: f => listeners.push(f) };
+  })();
+  // "il/elle/on" + "mange" → "il mange"; "j'" + "ai mangé" → "j'ai mangé"
+  const spoken = (...parts) => parts.filter(Boolean).map(x => String(x).split('/')[0].trim()).reduce((a, b) => (!a ? b : /['’]$/.test(a) ? a + b : a + ' ' + b), '');
+  const tapWord = () => (matchMedia('(hover: none)').matches ? 'Tap' : 'Click');
+  // tap anything marked data-say to hear it; a speaker next to a word lights that word up
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-say]');
+    if (!t || t.closest('.chip') || e.target.closest('.chip')) return;
+    e.preventDefault();
+    const hl = t.classList.contains('spk') ? (t.previousElementSibling && t.previousElementSibling.classList.contains('say') ? t.previousElementSibling : null) : t;
+    Speech.say([[t.dataset.say, hl]]);
+  });
+
   /* ---------------- Storage ---------------- */
   const KEY_S = 'apprenez.settings.v1', KEY_D = 'apprenez.data.v1';
   const load = (k, d) => { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : d; } catch (e) { return d; } };
@@ -31,8 +90,8 @@
 
   const DEFAULT_SETTINGS = () => ({
     num: 10,
-    types: { fill: true, mc: true },
-    forms: { en: true, fr: true },
+    types: { fill: true, dnd: true, mc: true },
+    forms: { en: true, fr: true, au: false },
     answerForms: { verb: true, pron: true },
     objPron: { do: true, io: true, refl: true, y: true, en: true },
     otherVerbs: { modal: false },
@@ -67,7 +126,7 @@
   const DEFAULT_ND = () => ({
     num: 10,
     types: { fill: true, dnd: true, mc: true },
-    forms: { en: true, fr: true },
+    forms: { en: true, fr: true, au: false },
     answerForms: { noun: true, det: true },
     dets: { def: true, ind: true, part: true, pos: true, dem: true },
     nouns: { plural: true },
@@ -177,9 +236,43 @@
   }
 
   const COMMON_IDS = V.VERBS.filter(x => x.common).map(x => x.id);
+  // Audio questions are French questions you can listen to; without a French voice they're plain French questions
+  const formList = () => [settings.forms.en && 'en', settings.forms.fr && 'fr', settings.forms.au && 'au'].filter(Boolean);
+  const audioForm = q => { if (q.form === 'au') { q.form = 'fr'; q.audio = Speech.has(); } return q; };
+  // Drag and drop for a sentence: each word of the answer is a tile ("il", "l'", "a", "donné"; "donne", "les", "lui"),
+  // plus 3–4 extra tiles taken from the believable wrong answers
+  const SUBJ_WORDS = new Set(['je', "j'", 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles']);
+  const SWAP = { il: ['elle'], elle: ['il'], ils: ['elles'], elles: ['ils'], je: ['tu'], tu: ['je'], nous: ['vous'], vous: ['nous'], on: ['il'],
+    le: ['la', 'les'], la: ['le', 'les'], les: ['leur', 'le'], "l'": ['le', 'la'], lui: ['leur', 'le'], leur: ['lui', 'les'], y: ['en'], en: ['y'],
+    me: ['te'], te: ['me'], se: ['te'], "m'": ["t'"], "t'": ["m'"], "s'": ["t'"], moi: ['toi'], toi: ['moi'] };
+  function sentenceTokens(str) {
+    const out = [];
+    str.trim().split(/\s+/).forEach((w, wi) => w.split('-').forEach((h, hi) => {
+      if (!h) return;
+      (h.match(/[^'’]+['’]|[^'’]+$/g) || [h]).forEach((t, ti) => out.push({ t, sep: ti ? '' : hi ? '-' : wi ? ' ' : '' }));
+    }));
+    return out;
+  }
+  function sentenceTiles(q, wrong) {
+    const toks = sentenceTokens(q.ans.blank);
+    if (!toks.length) return null;
+    const capFirst = !q.before;
+    if (capFirst) toks[0].t = cap(toks[0].t);
+    const have = new Set(toks.map(x => V.norm(x.t)));
+    const pool = [];
+    wrong.forEach(o => sentenceTokens(o).forEach(x => { const k = V.norm(x.t); if (!have.has(k)) { have.add(k); pool.push(capFirst && SUBJ_WORDS.has(x.t.toLowerCase()) ? cap(x.t) : x.t); } }));
+    // not enough? swap a pronoun for a close one (ils → elles, le → la, lui → leur, y → en)
+    if (pool.length < 4) toks.forEach(x => (SWAP[x.t.toLowerCase()] || []).forEach(o => { const k = V.norm(o); if (!have.has(k)) { have.add(k); pool.push(x.t[0] !== x.t[0].toLowerCase() ? cap(o) : o); } }));
+    // leave out stubs like "dev" that are just the start of another word
+    const words = toks.map(x => V.norm(x.t)).concat(pool.map(V.norm));
+    const real = pool.filter(t => { const k = V.norm(t); return !words.some(w => w.length > k.length && w.startsWith(k) && k.length >= 3); });
+    const extras = V.shuffle(real).slice(0, toks.length >= 4 ? 3 : 4);
+    if (extras.length < 2) return null;
+    return { slots: toks.map(x => [x.t]), seps: toks.map(x => x.sep), whole: true, extras };
+  }
   function makeQuestion(c) {
-    const kinds = [settings.types.fill && 'fill', settings.types.mc && 'mc'].filter(Boolean);
-    const forms = [settings.forms.en && 'en', settings.forms.fr && 'fr'].filter(Boolean);
+    const kinds = [settings.types.fill && 'fill', settings.types.dnd && 'dnd', settings.types.mc && 'mc'].filter(Boolean);
+    const forms = formList();
     const v = V.BY_ID[c.id];
     const af = settings.answerForms;
     // sentence patterns this verb allows, limited to the pronoun types switched on
@@ -235,12 +328,16 @@
     if (!b) b = S.build(v, c.tense, c.pronoun, pat, mode, spec);
     if (!b) return null; // form doesn't exist (e.g. "je faut")
     const cv = modal || v; // the conjugated verb
-    const q = { verb: cv, inner, study: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms), mode,
+    const q = audioForm({ verb: cv, inner, study: v, tense: c.tense, pronoun: c.pronoun, kind: pick(kinds), form: pick(forms), mode,
       ans: b.ans, before: b.before, after: b.after, english: b.english, cues: b.cues || [],
-      spec: b.spec, patIndex: (inner ? ipats : all).indexOf(pat), patType: pat.type };
+      spec: b.spec, patIndex: (inner ? ipats : all).indexOf(pat), patType: pat.type });
+    if (q.kind === 'dnd') {
+      q.tiles = sentenceTiles(q, S.options(b, cv, c.tense, c.pronoun));
+      if (!q.tiles) { const k = kinds.filter(x => x !== 'dnd'); if (!k.length) return null; q.kind = pick(k); }
+    }
     if (q.kind === 'mc') {
       const opts = [b.ans.blank].concat(S.options(b, cv, c.tense, c.pronoun));
-      if (opts.length < 3) q.kind = 'fill';
+      if (opts.length < 3) { if (!kinds.includes('fill')) return null; q.kind = 'fill'; }
       else {
         const order = V.shuffle(opts.map((_, i) => i));
         q.options = order.map(i => opts[i]);
@@ -265,8 +362,8 @@
       if (!selTenses().length) return 'Choose at least one tense in Settings.';
       return null;
     }
-    if (!settings.types.fill && !settings.types.mc) return 'Choose at least one question type in Settings.';
-    if (!settings.forms.en && !settings.forms.fr) return 'Choose English or French under Question Form in Settings.';
+    if (!settings.types.fill && !settings.types.mc && !settings.types.dnd) return 'Choose at least one question type in Settings.';
+    if (!settings.forms.en && !settings.forms.fr && !settings.forms.au) return 'Choose English, French or Audio under Question Form in Settings.';
     if (!settings.answerForms.verb && !settings.answerForms.pron) return 'Choose Verbs or Pronouns under Answer Form in Settings.';
     if (!settings.answerForms.verb && !Object.values(settings.objPron).some(Boolean)) return 'Answer Form is set to Pronouns only, so switch on at least one type under Other Pronouns in Settings.';
     if (!selPronouns().length) return 'Choose at least one pronoun in Settings.';
@@ -337,13 +434,19 @@
     grid: svg('<rect x="3.5" y="4" width="7" height="4" rx="1"/><rect x="13.5" y="4" width="7" height="4" rx="1"/><rect x="3.5" y="10" width="7" height="4" rx="1"/><rect x="13.5" y="10" width="7" height="4" rx="1"/><rect x="3.5" y="16" width="7" height="4" rx="1"/><rect x="13.5" y="16" width="7" height="4" rx="1"/>'),
     ret: svg('<path d="M20 5v6a3 3 0 0 1-3 3H6"/><path d="M10 10l-4 4 4 4"/>', 'stroke-width="2"'),
     book: svg('<path d="M12 6.5C10 5 7.5 4.5 4 4.8v13.4c3.5-.3 6 .2 8 1.8 2-1.6 4.5-2.1 8-1.8V4.8c-3.5-.3-6 .2-8 1.7z"/><path d="M12 6.5V20"/>'),
+    spk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" fill="currentColor" stroke-width="1.6"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.3 6.3a8 8 0 0 1 0 11.4"/></svg>',
     verbs: svg('<path d="M4 5.5h10M4 10h7M4 14.5h10M4 19h6"/><path d="M16.5 13.5l2 2 3.5-4"/>'),
   };
+
+  const spkBtn = (text, cls = '') => `<button type="button" class="spk${cls ? ' ' + cls : ''}"${text != null ? ` data-say="${esc(text)}"` : ''} aria-label="Play audio">${ICON.spk}</button>`;
+  const sayIt = (html, text) => `<span class="say" data-say="${esc(text)}">${html}</span>`;
+  const tapHint = what => `<p class="tap-hint">${tapWord()} any ${what} to hear it.</p>`;
 
   /* ---------------- Router ---------------- */
   let view = 'home';
   function go(v) {
     const t = $('#toast'); if (t && t.classList.contains('has-action')) t.classList.remove('show', 'has-action');
+    Speech.stop();
     if (v === 'list' && view === 'settings') settingsScroll = window.scrollY;
     if (v === 'verb' && view === 'list') listRestore = { y: window.scrollY, shown: listShown };
     if (v === 'home' && quiz) quiz = null; // leaving the trainer ends the quiz (answers are already saved)
@@ -356,7 +459,7 @@
   function render() {
     const app = $('#app');
     app.innerHTML = '';
-    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb, guide: viewGuide, meanings: viewMeanings, noun: viewNoun, nmeanings: viewNMeanings }[view]());
+    app.appendChild({ home: viewHome, quiz: viewQuiz, settings: viewSettings, progress: viewProgress, list: viewList, verb: viewVerb, guide: viewGuide, meanings: viewMeanings, noun: viewNoun, nmeanings: viewNMeanings, appsettings: viewAppSettings }[view]());
   }
 
   let toastTimer;
@@ -373,6 +476,7 @@
     const node = el(`
       <main class="screen home">
         <header class="home-head">
+          <button class="icon home-gear" data-act="appsettings" aria-label="App settings">${ICON.gear}</button>
           <p class="eyebrow">Let’s Learn French!</p>
           <h1>Apprenez le français&nbsp;!</h1>
           <div class="rule"></div>
@@ -402,6 +506,7 @@
         </ul>
       </main>`);
     $$('[data-mod]', node).forEach(b => b.onclick = () => { setModule(b.dataset.mod); go('quiz'); });
+    $('[data-act="appsettings"]', node).onclick = () => go('appsettings');
     return node;
   }
 
@@ -478,7 +583,7 @@
     if (!q.nd) [q.verb].concat(q.inner ? [q.inner] : []).forEach(x => hintParts.push(`<span lang="fr" class="q-inf" data-id="${esc(x.id)}">${esc(x.id)}</span>`));
     if (askPron && !q.nd) q.cues.forEach(c => hintParts.push(tagged(c.t, c.en)));
     qa.innerHTML = `
-      <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : q.kind === 'dnd' ? 'Drag and drop' : 'Fill in the blank'}</div>
+      <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'mc' ? 'Multiple choice' : q.kind === 'dnd' ? 'Drag and drop' : 'Fill in the blank'}${q.audio ? '<span class="dot">·</span>Audio' : ''}</div>
       <p class="q-tense" lang="fr" style="color:${q.color || TENSE_COLOR[q.tense]}">${esc(tl)}</p>
       <div class="q-rule"></div>
       <p class="q-text" lang="${q.form === 'fr' ? 'fr' : 'en'}">${sentence}</p>
@@ -503,7 +608,8 @@
       s.replaceWith(a);
     });
     if (quiz.state === 'answered') linkVerb();
-    const finishQ = ok => { quiz.state = 'answered'; quiz.lastOk = ok; quiz.results.push({ q, ok }); record(q, ok); $('.pbar div', node).style.width = (quiz.results.length / quiz.qs.length) * 100 + '%'; linkVerb(); };
+    const markSpk = ok => { const sp = $('.q-text .spk', qa); if (sp) sp.classList.add(ok ? 'good' : 'bad'); };
+    const finishQ = ok => { quiz.state = 'answered'; quiz.lastOk = ok; quiz.results.push({ q, ok }); record(q, ok); $('.pbar div', node).style.width = (quiz.results.length / quiz.qs.length) * 100 + '%'; linkVerb(); markSpk(ok); };
 
     if (q.kind === 'dnd') {
       renderNDnd(q, qa, aa, finishQ, linkVerb, nextLabel);
@@ -598,6 +704,14 @@
       $$('.opt', aa).forEach(b => b.onclick = () => { if (quiz.state === 'ask') show(+b.dataset.i, true); });
       if (quiz.state === 'answered' && quiz.picked != null) show(quiz.picked, false);
       nextBtn.onclick = advance;
+    }
+    // Audio questions: tap the sentence, or the speaker after it, to hear the whole sentence
+    if (q.audio) {
+      const qt = $('.q-text', qa), text = q.nd ? q.ans.full : cap(q.ans.full) + '.';
+      qt.insertAdjacentHTML('beforeend', spkBtn(null));
+      qt.classList.add('say-q');
+      qt.addEventListener('click', e => { if (e.target.closest('.chip')) return; e.preventDefault(); Speech.say([[text, null]]); });
+      if (quiz.state === 'answered') markSpk(quiz.lastOk);
     }
     return node;
   }
@@ -787,7 +901,7 @@
       <div class="q-meta">Question ${quiz.i + 1} of ${quiz.qs.length}<span class="dot">·</span>${q.kind === 'dnd' ? 'Drag and drop' : 'Fill in the blank'}</div>
       <p class="q-tense" lang="fr" style="color:${TENSE_COLOR[q.tense]}">${esc(tl)}</p>
       <div class="q-rule"></div>
-      <p class="vq-inf" lang="fr"><span class="q-inf" data-id="${esc(q.verb.id)}">${esc(q.verb.id)}</span></p>
+      <p class="vq-inf" lang="fr">${sayIt(esc(q.verb.id), q.verb.id)}${spkBtn(q.verb.id)}</p>
       <p class="vq-gloss">${esc(V.englishGloss(q.verb))}</p>
       <div class="vgrid2">${cellsOrder.map(i => {
         if (i === null || !(i in byI)) return '<div class="vrow empty"></div>';
@@ -814,12 +928,28 @@
         while ((b.scrollWidth > b.clientWidth + 1 || tgt.offsetHeight > 40) && size > 11) { size -= 1; tgt.style.fontSize = size + 'px'; }
       }
     });
-    // once answered, the infinitive links to the verb's page; Back comes back here
-    const linkVerb = () => $$('span.q-inf', qa).forEach(s => {
-      const a = el(`<a href="#" class="q-inf def-link" lang="fr">${esc(s.dataset.id)}</a>`);
-      a.onclick = e => { e.preventDefault(); verbId = s.dataset.id; verbFrom = 'quiz'; go('verb'); };
-      s.replaceWith(a);
-    });
+    // once answered: the English opens the verb's page (Back comes back here), the speaker turns
+    // green or red and plays the infinitive and every form, and each form can be tapped to hear it
+    const linkVerb = () => {
+      const g = $('.vq-gloss', qa);
+      if (g && !g.querySelector('a')) {
+        g.innerHTML = `<a href="#" class="def-link">${esc(V.englishGloss(q.verb))}</a>`;
+        g.firstChild.onclick = e => { e.preventDefault(); verbId = q.verb.id; verbFrom = 'quiz'; go('verb'); };
+      }
+      const imp = q.tense === 'imperatif';
+      const items = [];
+      S6.forEach((sl, j) => {
+        const c = cell(j), t = $('.vbl', c).textContent.trim();
+        c.classList.add('say');
+        c.dataset.say = imp ? t : spoken($('.pr', c).textContent, sl.refl ? $('.rf', c).textContent : '', t);
+        items.push([c.dataset.say, c]);
+      });
+      const sp = $('.vq-inf .spk', qa), inf = $('.vq-inf .say', qa);
+      sp.classList.add(quiz.lastOk ? 'good' : 'bad');
+      sp.removeAttribute('data-say');
+      sp.setAttribute('aria-label', 'Play the infinitive and every form');
+      sp.onclick = e => { e.preventDefault(); Speech.say([[q.verb.id, inf]].concat(items)); };
+    };
     const isLast = quiz.i >= quiz.qs.length - 1;
     const nextLabel = isLast ? 'Finish' : 'Next';
     const setMsg = (main, cls, sub = '') => { w.msg = { main, cls, sub }; showMsg(); };
@@ -965,7 +1095,7 @@
       if (good.every(Boolean)) { S6.forEach((_, j) => { w.status[j] = 'good'; }); finish(good); }
       else if (quiz.tries >= 3) { reveal(good); finish(good); }
       else { const left = 3 - quiz.tries; setMsg('Not quite. Some forms are wrong.', 'warn', `Tap a placed form to send it back. ${left} ${left === 1 ? 'try' : 'tries'} left`); return; }
-      btn.textContent = nextLabel; linkVerb(); paintAllDone();
+      btn.textContent = nextLabel; paintAllDone(); linkVerb();
     };
     const paintAllDone = () => {
       // show what was placed (green) and the corrections (red), and lock the tiles
@@ -1019,7 +1149,7 @@
     if (!n) return null;
     const af = settings.answerForms;
     const kinds = [settings.types.fill && 'fill', settings.types.dnd && 'dnd', settings.types.mc && 'mc'].filter(Boolean);
-    const forms = [settings.forms.en && 'en', settings.forms.fr && 'fr'].filter(Boolean);
+    const forms = formList();
     const m = c.miss && data.missed[c.miss];
     let v, dk, owner = null, ownerEn = null, mode, b;
     const anyDet = N.KINDS.some(k => settings.dets[k.id]);
@@ -1047,11 +1177,11 @@
     if (!kind || !enough()) return null;
     // an English meaning shared by two nouns ("place") is asked in French
     let form = pick(forms);
-    if (form === 'en' && !n.uq) { if (!forms.includes('fr')) return null; form = 'fr'; }
+    if (form === 'en' && !n.uq) { const f = forms.filter(x => x !== 'en'); if (!f.length) return null; form = pick(f); }
     const K = N.KIND[dk];
-    const q = { nd: true, noun: n, verb: { id: n.id }, study: { id: n.id }, var: v, dkind: dk, owner, ownerEn, kind, form, mode, b,
+    const q = audioForm({ nd: true, noun: n, verb: { id: n.id }, study: { id: n.id }, var: v, dkind: dk, owner, ownerEn, kind, form, mode, b,
       label: anyDet || m ? K.label : 'nom', color: anyDet || m ? K.color : 'var(--ink-2)',
-      ans: b.ans, before: b.before, after: b.after, english: b.english };
+      ans: b.ans, before: b.before, after: b.after, english: b.english });
     if (kind === 'mc') {
       const opts = [b.ans.blank].concat(N.options(b, n));
       q.options = V.shuffle(opts);
@@ -1079,7 +1209,11 @@
     let host = q.form === 'fr' ? $('.q-text', qa) : $('.q-scaffold', qa);
     if (!host) { host = el('<p class="q-scaffold" lang="fr"></p>'); $('.q-text', qa).after(host); }
     const slotHtml = j => `<span class="nslot" data-j="${j}"></span>`;
-    host.innerHTML = q.mode === 'both' ? slotHtml(0) + ' ' + slotHtml(1)
+    if (T.seps) { // a sentence: before + one blank per word + after
+      const sepHtml = x => (x === '-' ? '<span class="nsep">-</span>' : x);
+      host.innerHTML = (q.before ? esc(cap(q.before)) + (/['’-]$/.test(q.before) ? '' : ' ') : '') + slots.map((_, j) => (j ? sepHtml(T.seps[j]) : '') + slotHtml(j).replace('class="nslot"', 'class="nslot ws"')).join('')
+        + (q.after ? (q.after.startsWith('-') ? '' : ' ') + esc(q.after) : '');
+    } else host.innerHTML = q.mode === 'both' ? slotHtml(0) + ' ' + slotHtml(1)
       : q.mode === 'det' ? slotHtml(0) + ' ' + esc(q.after) : esc(q.before) + ' ' + slotHtml(0);
     aa.innerHTML = `
       <div class="a-inner vq-dnd nd-dnd">
@@ -1094,7 +1228,7 @@
     const paint = () => {
       slots.forEach((acc, j) => {
         const sl = $(`.nslot[data-j="${j}"]`, host);
-        sl.className = 'nslot' + (w.status[j] ? ' ' + w.status[j] : '');
+        sl.className = 'nslot' + (T.seps ? ' ws' : '') + (w.status[j] ? ' ' + w.status[j] : '');
         if (w.status[j] === 'fixed') sl.textContent = acc[0];
         else if (w.place[j] !== null) sl.innerHTML = w.status[j] ? esc(w.chips[w.place[j]]) : `<span class="chip placed" data-c="${w.place[j]}">${esc(w.chips[w.place[j]])}</span>`;
         else sl.textContent = '';
@@ -1134,7 +1268,11 @@
       if (quiz.state === 'answered') return advance();
       if (w.place.some(x => x === null)) { setMsg('Fill every blank first.', 'warn'); return; }
       quiz.tries++;
-      const good = slots.map((acc, j) => acc.map(V.norm).includes(V.norm(w.chips[w.place[j]])));
+      let good = slots.map((acc, j) => acc.map(V.norm).includes(V.norm(w.chips[w.place[j]])));
+      if (T.whole) { // the sentence as a whole decides, so any accepted answer counts
+        const said = slots.map((_, j) => (j ? T.seps[j] : '') + w.chips[w.place[j]]).join('');
+        if (V.check(said, q.ans, 'fr') === 'correct') good = good.map(() => true);
+      }
       if (good.every(Boolean)) { w.status = slots.map(() => 'good'); paint(); setMsg('Correct!', 'good'); finishQ(true); lock(); return; }
       if (quiz.tries >= 3) {
         // the right words in green, the wrong ones corrected in red
@@ -1145,6 +1283,98 @@
     };
     paint(); showMsg();
     if (answered) lock();
+  }
+
+  const CREDIT = {
+    lefff: '<p class="foot muted credits">Verb conjugations from the <a href="https://pauillac.inria.fr/~sagot/index.html#lefff">Lefff</a> by Benoît Sagot (Inria), used under the <a href="data/LICENSE-LGPLLR.txt">LGPL-LR licence</a>.</p>',
+    wikt: '<p class="foot muted credits">Verb meanings and examples from the <a href="https://en.wiktionary.org/">English Wiktionary</a>, by Wiktionary contributors, via <a href="https://kaikki.org/">Wiktextract</a>, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (reformatted).</p>',
+    flelex: '<p class="foot muted credits">CEFR levels of verbs and nouns from <a href="https://cental.uclouvain.be/flelex/">FLELex</a> (François, Gala, Watrin &amp; Fairon, 2014), used under the <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0 licence</a>. Levels of tenses, pronouns and determiners follow the usual order of French courses.</p>',
+    nouns: '<p class="foot muted credits">Nouns: frequencies from <a href="http://www.lexique.org/">Lexique 3.83</a> (New, Pallier et al.); genders, plurals, meanings and examples from the English Wiktionary; both used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (adapted).</p>',
+  };
+
+  /* ---------------- App settings (voice, speed, backup) ---------------- */
+  const OS = (() => { const ua = navigator.userAgent; return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios' : /Android/.test(ua) ? 'android' : /Mac/.test(ua) ? 'mac' : /Windows/.test(ua) ? 'win' : 'other'; })();
+  function viewAppSettings() {
+    let lastBackup = null; try { lastBackup = +localStorage.getItem('apprenez.lastBackup') || null; } catch (e) { /* ignore */ }
+    const how = (os, title, steps, note = '') => `<details class="how-to" data-os="${os}"${OS === os ? ' open' : ''}><summary>${title}</summary><ol>${steps.map(x => `<li>${x}</li>`).join('')}</ol>${note ? `<p class="muted small">${note}</p>` : ''}</details>`;
+    const node = el(`
+      <div class="screen page">
+        <header class="bar">
+          <button class="icon" data-act="back" aria-label="Back to home">${ICON.back}</button>
+          <div class="bar-title">Settings</div>
+          <div class="bar-right"></div>
+        </header>
+        <div class="content">
+          <section class="group">
+            <h2>Audio</h2>
+            <h3>Voice</h3>
+            <div class="sel-wrap"><select class="voice-sel" aria-label="French voice"></select></div>
+            <p class="group-note muted voice-note"></p>
+            <h3>Speed</h3>
+            <div class="seg" role="radiogroup" aria-label="Speed">
+              <button class="seg-b" role="radio" data-rate="0.75">Slow</button><button class="seg-b" role="radio" data-rate="1">Normal</button>
+            </div>
+            <button class="btn test-btn" data-act="sample">${ICON.spk}<span>Play a sample</span></button>
+          </section>
+          <section class="group">
+            <h2>Better Voices</h2>
+            <p class="muted">Every device comes with a basic French voice. Most can download a much more natural one for free. Afterwards, close and reopen this app, then choose the new voice under Voice.</p>
+            ${how('ios', 'iPhone and iPad <span class="muted">· iOS 26 and 27</span>', [
+              'Open <b>Settings</b> → <b>Accessibility</b> → <b>Read &amp; Speak</b> → <b>Voices</b>.<br><span class="muted">Or search for “Voices” at the top of Settings.</span>',
+              'Tap <b>French</b>, then <b>French (France)</b>.',
+              'Tap a voice marked <b>Premium</b> (best) or <b>Enhanced</b> to download it. Use Wi-Fi: voices can be 100&nbsp;MB or more.',
+              'Reopen this app and choose the voice under <b>Voice</b>.'], 'On iOS 18 and earlier, Read &amp; Speak is called Spoken Content. Siri voices can’t be used by web apps.')}
+            ${how('mac', 'Mac', [
+              'Choose Apple menu → <b>System Settings</b> → <b>Accessibility</b> → <b>Read &amp; Speak</b>.',
+              'Click the <b>ⓘ</b> button next to <b>System voice</b>.',
+              'Choose <b>French</b> on the left, then click a <b>Premium</b> or <b>Enhanced</b> voice to download it.',
+              'Reopen this app in Safari or Chrome and choose the voice under <b>Voice</b>.'])}
+            ${how('win', 'Windows', [
+              'The easiest way: open this app in <b>Microsoft Edge</b>. Edge includes natural-sounding French voices (Denise, Henri and others, marked “Natural”) with no setup. They need an internet connection.',
+              'For other browsers: open <b>Settings</b> → <b>Time &amp; language</b> → <b>Language &amp; region</b> → <b>Add a language</b>. Choose <b>French (France)</b> and make sure <b>Text-to-speech</b> is ticked.',
+              'Sign out and back in, then choose the voice under <b>Voice</b>.'])}
+            ${how('android', 'Android', [
+              'Open <b>Settings</b> → <b>Accessibility</b> → <b>Text-to-speech output</b>. <span class="muted">On some phones it’s under General management or System → Languages.</span>',
+              'Choose <b>Speech Services by Google</b> as the preferred engine.',
+              'Tap the settings icon next to it → <b>Install voice data</b> → <b>French (France)</b>, and download a voice.',
+              'Reopen this app and choose the voice under <b>Voice</b>.'])}
+          </section>
+          <section class="group">
+            <h2>Backup</h2>
+            <p class="muted">Saves your progress, lists and settings for <strong>all modules</strong> in one .zip file, for example in iCloud Drive, with a separate file inside for each module. Restore Backup takes that .zip, or one module’s file on its own.</p>
+            <div class="row-btns">
+              <button class="btn" data-act="backup">Save Backup</button>
+              <button class="btn" data-act="restore">Restore Backup</button>
+            </div>
+            <p class="foot-note muted">${lastBackup ? 'Last backup: ' + fmtDate(lastBackup) : 'No backup saved yet.'}</p>
+            <input type="file" id="restore-file" accept=".zip,.json,application/zip,application/json" hidden>
+          </section>
+          <p class="foot muted">Your progress is stored only on this device.</p>
+          <p class="foot muted credits">App version ${APP_VERSION}</p>
+        </div>
+      </div>`);
+    $('[data-act="back"]', node).onclick = () => go('home');
+    const sel = $('.voice-sel', node), note = $('.voice-note', node);
+    const fill = () => {
+      const vs = Speech.list(), cur = Speech.current();
+      sel.innerHTML = vs.length ? vs.map((v, i) => `<option value="${i}"${v === cur ? ' selected' : ''}>${esc(v.name.replace(/\s*\((Enhanced|Premium|Natural)\)/i, ''))} · ${Speech.quality(v)[0]} · ${esc(v.lang.replace('_', '-'))}</option>`).join('')
+        : `<option>${Speech.ok ? 'No French voice on this device yet' : 'This browser can’t speak'}</option>`;
+      sel.disabled = !vs.length;
+      note.textContent = !vs.length ? 'Audio is switched off until a French voice is installed. See Better Voices below.'
+        : Speech.quality(cur)[1] < 40 ? 'This is a basic voice. See Better Voices below for a more natural one.' : 'The app picks the best French voice on this device. You can choose another one here.';
+    };
+    fill(); Speech.onChange(() => { if (view === 'appsettings') fill(); });
+    sel.onchange = () => { const v = Speech.list()[+sel.value]; if (!v) return; appSet.voice = v.voiceURI; saveApp(); fill(); Speech.say([['Bonjour !', null]]); };
+    const segs = $$('.seg-b', node);
+    const paintSeg = () => segs.forEach(b => { const on = +b.dataset.rate === (appSet.rate || 1); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+    segs.forEach(b => b.onclick = () => { appSet.rate = +b.dataset.rate; saveApp(); paintSeg(); Speech.say([['Je parle à cette vitesse.', null]]); });
+    paintSeg();
+    $('[data-act="sample"]', node).onclick = () => Speech.say([['Bonjour ! Nous apprenons le français ensemble.', null]]);
+    $('[data-act="backup"]', node).onclick = saveBackup;
+    const fileIn = $('#restore-file', node);
+    $('[data-act="restore"]', node).onclick = () => fileIn.click();
+    fileIn.onchange = () => { const f = fileIn.files[0]; fileIn.value = ''; if (f) readBackup(f); };
+    return node;
   }
 
   /* ---------------- Settings ---------------- */
@@ -1188,10 +1418,10 @@
     return groupIds(key).length;
   }
 
+  const audioSub = what => `French ${what}s you can listen to: tap the ${what} or <span class="spk-inline">${ICON.spk}</span><span class="no-voice"> · No French voice on this device yet: see Settings on the home screen.</span>`;
   function viewSettings() {
     const s = settings, vb = mod === 'vb', nd = mod === 'nd';
     const left = ['je', 'tu', 'il', 'elle', 'on'], right = ['nous', 'vous', 'ils', 'elles'];
-    let lastBackup = null; try { lastBackup = +localStorage.getItem('apprenez.lastBackup') || null; } catch (e) { /* ignore */ }
     const node = el(`
       <div class="screen page">
         <header class="bar">
@@ -1215,13 +1445,14 @@
             <h3>Question Type</h3>
             <div class="checks" data-set="types">
               ${check('fill', 'Fill in the blank', s.types.fill)}
-              ${vb ? check('dnd', 'Drag and drop', s.types.dnd) : nd ? check('dnd', 'Drag and drop', s.types.dnd) + check('mc', 'Multiple choice', s.types.mc) : check('mc', 'Multiple choice', s.types.mc)}
+              ${vb ? check('dnd', 'Drag and drop', s.types.dnd) : check('dnd', 'Drag and drop', s.types.dnd) + check('mc', 'Multiple choice', s.types.mc)}
             </div>
             <p class="warn-note" data-warn="types">Select at least one question type.</p>
             ${vb ? '' : nd ? `<h3>Question Form</h3>
             <div class="checks" data-set="forms">
               ${check('en', 'English', s.forms.en, 'Questions are shown in English; answer in French')}
               ${check('fr', 'French', s.forms.fr, 'Questions are French phrases with a blank')}
+              ${check('au', 'Audio', s.forms.au, audioSub('phrase'))}
             </div>
             <p class="warn-note" data-warn="forms">Select at least one question form.</p>
             <h3>Answer Form</h3>
@@ -1234,6 +1465,7 @@
             <div class="checks" data-set="forms">
               ${check('en', 'English', s.forms.en, 'Questions are shown in English; answer in French')}
               ${check('fr', 'French', s.forms.fr, 'Questions are French sentences with a blank')}
+              ${check('au', 'Audio', s.forms.au, audioSub('sentence'))}
             </div>
             <p class="warn-note" data-warn="forms">Select at least one question form.</p>
             <h3>Answer Form</h3>
@@ -1293,28 +1525,14 @@
             <p class="warn-note" data-warn="sources">Select at least one kind of study content.</p>
           </section>
 
-          <section class="group">
-            <h2>Backup</h2>
-            <p class="muted">Saves your progress, lists and settings for <strong>all modules</strong> in one .zip file, for example in iCloud Drive, with a separate file inside for each module. Restore Backup takes that .zip, or one module’s file on its own.</p>
-            <div class="row-btns">
-              <button class="btn" data-act="backup">Save Backup</button>
-              <button class="btn" data-act="restore">Restore Backup</button>
-            </div>
-            <p class="foot-note muted">${lastBackup ? 'Last backup: ' + fmtDate(lastBackup) : 'No backup saved yet.'}</p>
-            <input type="file" id="restore-file" accept=".zip,.json,application/zip,application/json" hidden>
-          </section>
-
           <section class="group danger-zone">
             <h2>Delete Data</h2>
             <p class="muted">Removes your results and your Custom, In Review, Learned and Incorrect Answers lists for <strong>${esc(MOD_NAME[mod])}</strong> only. The other modules keep their data, and your settings and the verb lists are kept.</p>
             <button class="btn danger" data-act="delete">Delete Data</button>
           </section>
-          <p class="foot muted">Your progress is stored only on this device.</p>
-          <p class="foot muted credits">Verb conjugations from the <a href="https://pauillac.inria.fr/~sagot/index.html#lefff">Lefff</a> by Benoît Sagot (Inria), used under the <a href="data/LICENSE-LGPLLR.txt">LGPL-LR licence</a>.</p>
-          <p class="foot muted credits">Verb meanings and examples from the <a href="https://en.wiktionary.org/">English Wiktionary</a>, by Wiktionary contributors, via <a href="https://kaikki.org/">Wiktextract</a>, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (reformatted).</p>
-          <p class="foot muted credits">CEFR levels of verbs and nouns from <a href="https://cental.uclouvain.be/flelex/">FLELex</a> (François, Gala, Watrin &amp; Fairon, 2014), used under the <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0 licence</a>. Levels of tenses, pronouns and determiners follow the usual order of French courses.</p>
-          <p class="foot muted credits">Nouns: frequencies from <a href="http://www.lexique.org/">Lexique 3.83</a> (New, Pallier et al.); genders, plurals, meanings and examples from the English Wiktionary; both used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0 licence</a> (adapted).</p>
-          <p class="foot muted credits">App version ${APP_VERSION}</p>
+          ${nd ? '' : CREDIT.lefff + CREDIT.wikt}
+          ${nd ? CREDIT.nouns : ''}
+          ${CREDIT.flelex}
         </div>
       </div>`);
 
@@ -1333,10 +1551,6 @@
     });
     warn();
     $$('[data-list]', node).forEach(b => b.onclick = () => { listKey = b.dataset.list; listSearch = ''; listFrom = 'settings'; go('list'); });
-    $('[data-act="backup"]', node).onclick = saveBackup;
-    const fileIn = $('#restore-file', node);
-    $('[data-act="restore"]', node).onclick = () => fileIn.click();
-    fileIn.onchange = () => { const f = fileIn.files[0]; fileIn.value = ''; if (f) readBackup(f); };
     $('[data-act="delete"]', node).onclick = confirmDelete;
     if (settingsScroll) { const y = settingsScroll; settingsScroll = 0; requestAnimationFrame(() => window.scrollTo(0, y)); }
     return node;
@@ -1660,7 +1874,7 @@
       const label = `(${V.SLOT_PRONOUN[slot]})`;
       if (!p) return `<div class="vf missing"><span class="pr">${label}</span> —</div>`;
       const refl = v.refl ? '-' + { 1: 'toi', 3: 'nous', 4: 'vous' }[slot] : '';
-      return `<div class="vf"><span class="pr">${label}</span> <span class="fv">${esc(p.canon + refl)}</span>${dotFor('imperatif', slot)}</div>`;
+      return `<div class="vf say" data-say="${esc(p.canon + refl)}"><span class="pr">${label}</span> <span class="fv">${esc(p.canon + refl)}</span>${dotFor('imperatif', slot)}</div>`;
     };
     const cell = (tense, slot) => {
       const pr = V.SLOT_PRONOUN[slot];
@@ -1673,7 +1887,7 @@
       if (slot === 5) pron = pron.replace(/^ils/, 'ils/elles');
       const alt = !['pc', 'pqp', 'fa', 'cp'].includes(tense) && p.alts.length > 1 ? `<span class="alt"> or ${esc(p.alts.slice(1).join(', '))}</span>` : '';
       const sep = pron.endsWith("'") ? '' : ' ';
-      return `<div class="vf"><span class="pr">${esc(pron)}</span>${sep}<span class="fv">${esc(rest)}</span>${alt}${dotFor(tense, slot)}</div>`;
+      return `<div class="vf say" data-say="${esc(a.prefix + sep + rest)}"><span class="pr">${esc(pron)}</span>${sep}<span class="fv">${esc(rest)}</span>${alt}${dotFor(tense, slot)}</div>`;
     };
     const node = el(`
       <div class="screen page verb-page">
@@ -1683,7 +1897,8 @@
           <div class="bar-right">${mod === 'vb' ? '' : `<button class="icon star" data-act="star">${ICON.star}</button>`}<button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button></div>
         </header>
         <div class="content">
-          <h1 class="verb-title" lang="fr">${esc(v.id)}</h1>
+          <h1 class="verb-title" lang="fr">${sayIt(esc(v.id), v.id)}${spkBtn(v.id)}</h1>
+          ${tapHint('form')}
           <p class="verb-sub">${hasDefs(v) ? `<a href="#" class="def-link" data-act="meanings">${esc(V.englishGloss(v))}</a>` : esc(V.englishGloss(v))} · ${GROUP_NAME[v.group]} · ${AUX_NAME[v.aux]}${lvTag(verbLevel(v))}</p>
           <p class="verb-legend"><span><i class="ldot"></i>learned form</span><span><i class="rdot"></i>reviewed form</span></p>
           ${V.TENSES.map(t => `
@@ -1744,7 +1959,7 @@
               <li class="sense">
                 <div class="s-head"><span class="s-num">${i + 1}</span><span class="s-gloss">${esc(gloss)}</span></div>
                 ${tags.length ? `<div class="s-tags">${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
-                ${ex.length ? `<ul class="gd-ex">${ex.map(([fr, en]) => `<li><span class="fr" lang="fr">${esc(fr)}</span>${en ? `<span class="en">${esc(en)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+                ${ex.length ? `<ul class="gd-ex">${ex.map(([fr, en]) => `<li><span class="fr say" lang="fr" data-say="${esc(fr)}">${esc(fr)}</span>${en ? `<span class="en">${esc(en)}</span>` : ''}</li>`).join('')}</ul>` : ''}
               </li>`).join('')}
           </ol>
           <p class="foot muted credits">Meanings and examples from the <a href="${wikt}" target="_blank" rel="noopener">Wiktionary entry for <span lang="fr">${esc(word)}</span></a>, by Wiktionary contributors, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0 licence</a>. Reformatted for this app.</p>`;
@@ -1756,7 +1971,8 @@
           <div class="bar-right"></div>
         </header>
         <div class="content">
-          <h1 class="verb-title" lang="fr">${esc(v.id)}</h1>
+          <h1 class="verb-title" lang="fr">${sayIt(esc(v.id), v.id)}${spkBtn(v.id)}</h1>
+          ${defs.length ? tapHint('example') : ''}
           <p class="verb-sub">Meanings${defsState === 'ready' ? ` · ${defs.length} ${defs.length === 1 ? 'sense' : 'senses'}` : ''}</p>
           ${body}
         </div>
@@ -1785,7 +2001,8 @@
     const dot = v => { const f = data.forms[N.formKey(n.id, v)]; return !f ? '' : f.learnedAt ? '<i class="ldot" title="Learned"></i>' : '<i class="rdot" title="In review"></i>'; };
     const cellFor = v => {
       const w = N.wordOf(n, v), alts = N.altsOf(n, v);
-      return `<td lang="fr">${esc(N.join(N.determiner('def', n, v), w))}${dot(v)}${alts.length > 1 ? `<span class="alt"> or ${esc(alts.slice(1).join(', '))}</span>` : ''}<small>${esc(N.join(N.determiner('ind', n, v), w))}</small></td>`;
+      const d = N.join(N.determiner('def', n, v), w), i = N.join(N.determiner('ind', n, v), w);
+      return `<td lang="fr">${sayIt(esc(d), d)}${dot(v)}${alts.length > 1 ? `<span class="alt"> or ${esc(alts.slice(1).join(', '))}</span>` : ''}<small>${sayIt(esc(i), i)}</small></td>`;
     };
     const rows = [];
     const g0 = GENDER_NAME[n.g];
@@ -1823,7 +2040,8 @@
           <div class="bar-right"><button class="icon star" data-act="star">${ICON.star}</button><button class="icon" data-act="guide" aria-label="Grammar guide">${ICON.book}</button></div>
         </header>
         <div class="content">
-          <h1 class="verb-title" lang="fr">${esc(n.w)}</h1>
+          <h1 class="verb-title" lang="fr">${sayIt(esc(n.w), n.w)}${spkBtn(n.w)}</h1>
+          ${tapHint('form')}
           <p class="verb-sub">${hasLink ? `<a href="#" class="def-link" data-act="meanings">${esc(n.en)}</a>` : esc(n.en)} · ${n.pluralOnly ? g0 + ' plural' : n.fem && n.fem !== n.w ? 'masculine and feminine' : n.person ? 'masculine or feminine' : g0} · ${groupName}, no. ${fmtNum(n.rank)}${lvTag(nounLevel(n))}</p>
           <p class="verb-legend"><span><i class="ldot"></i>learned form</span><span><i class="rdot"></i>reviewed form</span></p>
           <table class="nf-table">
@@ -1857,7 +2075,7 @@
               <li class="sense">
                 <div class="s-head"><span class="s-num">${i + 1}</span><span class="s-gloss">${esc(gloss)}</span></div>
                 ${tags.length ? `<div class="s-tags">${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
-                ${ex.length ? `<ul class="gd-ex">${ex.map(([fr, en]) => `<li><span class="fr" lang="fr">${esc(fr)}</span>${en ? `<span class="en">${esc(en)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+                ${ex.length ? `<ul class="gd-ex">${ex.map(([fr, en]) => `<li><span class="fr say" lang="fr" data-say="${esc(fr)}">${esc(fr)}</span>${en ? `<span class="en">${esc(en)}</span>` : ''}</li>`).join('')}</ul>` : ''}
               </li>`).join('')}
           </ol>
           <p class="foot muted credits">Meanings and examples from the <a href="${wikt}" target="_blank" rel="noopener">Wiktionary entry for <span lang="fr">${esc(n.w)}</span></a>, by Wiktionary contributors, used under the <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0 licence</a>. Reformatted for this app.</p>`;
@@ -1869,7 +2087,8 @@
           <div class="bar-right"></div>
         </header>
         <div class="content">
-          <h1 class="verb-title" lang="fr">${esc(N.join(N.determiner('def', n, n.pluralOnly ? 'p' : 's'), n.w))}</h1>
+          <h1 class="verb-title" lang="fr">${(t => sayIt(esc(t), t) + spkBtn(t))(N.join(N.determiner('def', n, n.pluralOnly ? 'p' : 's'), n.w))}</h1>
+          ${defs.length ? tapHint('example') : ''}
           <p class="verb-sub">Meanings${ndefsState === 'ready' ? ` · ${defs.length} ${defs.length === 1 ? 'sense' : 'senses'}` : ''}</p>
           ${body}
         </div>
