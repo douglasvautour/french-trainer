@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '19';
+  const APP_VERSION = '20';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -33,14 +33,21 @@
     const ok = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
     // novelty voices (Apple's Bells, Bubbles…) are left out
     const NOVELTY = /\b(Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley|Jacques|Bad News|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Albert|Bahh|Fred|Junior|Kathy|Ralph)\b/i;
-    let voices = [];
+    let voices = [], sig = '';
+    const Speech0 = { quality: v => quality(v) };
     const quality = v => { const t = (v.name + ' ' + v.voiceURI).toLowerCase();
       return t.includes('premium') ? ['Premium', 50] : t.includes('natural') ? ['Natural', 45] : t.includes('enhanced') ? ['Enhanced', 40] : t.includes('google') ? ['Google', 30] : ['Standard', 10]; };
     const score = v => quality(v)[1] + (/^fr[-_]FR/i.test(v.lang) ? 8 : /^fr[-_]CA/i.test(v.lang) ? 2 : 0) + (v.localService ? 1 : 0);
     const listeners = [];
     function refresh() {
       if (!ok) return;
-      voices = speechSynthesis.getVoices().filter(v => /^fr/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a, b) => score(b) - score(a));
+      // iOS lists some voices twice (same name and language): keep the better copy
+      const seen = new Set();
+      const list = speechSynthesis.getVoices().filter(v => /^fr/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a, b) => score(b) - score(a))
+        .filter(v => { const k = v.name.replace(/\s*\((Enhanced|Premium|Natural)\)/i, '') + '|' + v.lang.replace('_', '-') + '|' + Speech0.quality(v)[0]; if (seen.has(k)) return false; seen.add(k); return true; });
+      const ns = list.map(v => v.voiceURI + v.lang).join(',');
+      if (ns === sig) return; // iOS fires voiceschanged often; only act on a real change
+      sig = ns; voices = list;
       document.documentElement.classList.toggle('no-audio', !voices.length);
       listeners.forEach(f => f());
     }
@@ -51,8 +58,15 @@
     const clear = () => $$('.speaking').forEach(e => e.classList.remove('speaking'));
     function stop() { token++; clear(); if (ok && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel(); }
     // items: [[text, elementToHighlight], …], spoken one after another
+    // iPhone: ask for "playback" audio, which may let speech play even in Silent Mode (Safari 17+)
+    let unlocked = false;
+    function unlock() {
+      if (unlocked) return; unlocked = true;
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ }
+    }
     function say(items) {
       if (!ok || !items.length) return;
+      unlock();
       const voice = current();
       const busy = speechSynthesis.speaking || speechSynthesis.pending;
       stop();
@@ -69,7 +83,7 @@
       // Safari can drop speech that starts right after a cancel; the first tap must speak at once
       if (busy) setTimeout(run, 80); else run();
     }
-    return { ok, say, stop, current, quality, list: () => voices, has: () => voices.length > 0, onChange: f => listeners.push(f) };
+    return { ok, say, stop, current, quality, list: () => voices, has: () => voices.length > 0, onChange: f => { listeners.length = 0; listeners.push(f); } };
   })();
   // "il/elle/on" + "mange" → "il mange"; "j'" + "ai mangé" → "j'ai mangé"
   const spoken = (...parts) => parts.filter(Boolean).map(x => String(x).split('/')[0].trim()).reduce((a, b) => (!a ? b : /['’]$/.test(a) ? a + b : a + ' ' + b), '');
@@ -1315,6 +1329,7 @@
               <button class="seg-b" role="radio" data-rate="0.75">Slow</button><button class="seg-b" role="radio" data-rate="1">Normal</button>
             </div>
             <button class="btn test-btn" data-act="sample">${ICON.spk}<span>Play a sample</span></button>
+            ${OS === 'ios' ? '<p class="group-note muted">No sound? Turn off <b>Silent Mode</b> (the switch or Action button on the side, or Control Centre) and check the volume. iPhones mute web audio in Silent Mode.</p>' : ''}
           </section>
           <section class="group">
             <h2>Better Voices</h2>
@@ -1363,7 +1378,10 @@
       note.textContent = !vs.length ? 'Audio is switched off until a French voice is installed. See Better Voices below.'
         : Speech.quality(cur)[1] < 40 ? 'This is a basic voice. See Better Voices below for a more natural one.' : 'The app picks the best French voice on this device. You can choose another one here.';
     };
-    fill(); Speech.onChange(() => { if (view === 'appsettings') fill(); });
+    let stale = false;
+    fill();
+    Speech.onChange(() => { if (view !== 'appsettings') return; if (document.activeElement === sel) stale = true; else fill(); });
+    sel.addEventListener('blur', () => { if (stale) { stale = false; fill(); } });
     sel.onchange = () => { const v = Speech.list()[+sel.value]; if (!v) return; appSet.voice = v.voiceURI; saveApp(); fill(); Speech.say([['Bonjour !', null]]); };
     const segs = $$('.seg-b', node);
     const paintSeg = () => segs.forEach(b => { const on = +b.dataset.rate === (appSet.rate || 1); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
