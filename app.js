@@ -1,6 +1,6 @@
 /* Apprenez le français ! — app */
 (function () {
-  const APP_VERSION = '21';
+  const APP_VERSION = '22';
   'use strict';
   const V = window.Verbs;
   const S = window.Sentences;
@@ -54,7 +54,9 @@
     if (ok) { refresh(); speechSynthesis.addEventListener ? speechSynthesis.addEventListener('voiceschanged', refresh) : (speechSynthesis.onvoiceschanged = refresh); setTimeout(refresh, 700); setTimeout(refresh, 2500); }
     else document.documentElement.classList.add('no-audio');
     // 'system': don't name a voice, so the device uses its own default French voice (on iPhone, the one ticked in Read & Speak)
-    const current = () => (appSet.voice === 'system' ? null : voices.find(v => v.voiceURI === appSet.voice) || voices[0] || null);
+    // on iPhone and iPad, Premium voices only work through the device default, so that's where they start
+    const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    const current = () => (appSet.voice === 'system' || (!appSet.voice && IOS) ? null : voices.find(v => v.voiceURI === appSet.voice) || voices[0] || null);
     let token = 0;
     const clear = () => $$('.speaking').forEach(e => e.classList.remove('speaking'));
     function stop() { token++; clear(); if (ok && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel(); }
@@ -1334,17 +1336,18 @@
           </section>
           <section class="group">
             <h2>Better Voices</h2>
-            <p class="muted">Every device comes with a basic French voice. Most can download a much more natural one for free. Afterwards, close and reopen this app, then choose the new voice under Voice.</p>
+            <p class="muted">Every device comes with a basic French voice. Most can download a much more natural one for free.</p>
             ${how('ios', 'iPhone and iPad <span class="muted">· iOS 26 and 27</span>', [
               'Open <b>Settings</b> → <b>Accessibility</b> → <b>Read &amp; Speak</b> → <b>Voices</b>.<br><span class="muted">Or search for “Voices” at the top of Settings.</span>',
               'Tap <b>French</b>, then <b>French (France)</b>.',
-              'Tap a voice marked <b>Premium</b> (best) or <b>Enhanced</b> to download it. Use Wi-Fi: voices can be 100&nbsp;MB or more.',
-              'Reopen this app and choose the voice under <b>Voice</b>.'], 'On iOS 18 and earlier, Read &amp; Speak is called Spoken Content. Siri voices can’t be used by web apps.')}
+              'Download a voice marked <b>Premium</b> (best) or <b>Enhanced</b>. Use Wi-Fi: voices can be 100&nbsp;MB or more.',
+              'Tap the voice you downloaded so it has the checkmark. This makes it your iPhone’s French voice.',
+              'In this app, choose <b>Device default for French</b> under <b>Voice</b> (it’s the starting choice), then tap <b>Play a sample</b>.'], 'iOS doesn’t list Premium voices for web apps, so they work only through Device default. On iOS 18 and earlier, Read &amp; Speak is called Spoken Content. Siri voices can’t be used by web apps.')}
             ${how('mac', 'Mac', [
               'Choose Apple menu → <b>System Settings</b> → <b>Accessibility</b> → <b>Read &amp; Speak</b>.',
               'Click the <b>ⓘ</b> button next to <b>System voice</b>.',
               'Choose <b>French</b> on the left, then click a <b>Premium</b> or <b>Enhanced</b> voice to download it.',
-              'Reopen this app in Safari or Chrome and choose the voice under <b>Voice</b>.'])}
+              'Close and reopen this app in Safari or Chrome and choose the voice under <b>Voice</b>.'])}
             ${how('win', 'Windows', [
               'The easiest way: open this app in <b>Microsoft Edge</b>. Edge includes natural-sounding French voices (Denise, Henri and others, marked “Natural”) with no setup. They need an internet connection.',
               'For other browsers: open <b>Settings</b> → <b>Time &amp; language</b> → <b>Language &amp; region</b> → <b>Add a language</b>. Choose <b>French (France)</b> and make sure <b>Text-to-speech</b> is ticked.',
@@ -1353,7 +1356,7 @@
               'Open <b>Settings</b> → <b>Accessibility</b> → <b>Text-to-speech output</b>. <span class="muted">On some phones it’s under General management or System → Languages.</span>',
               'Choose <b>Speech Services by Google</b> as the preferred engine.',
               'Tap the settings icon next to it → <b>Install voice data</b> → <b>French (France)</b>, and download a voice.',
-              'Reopen this app and choose the voice under <b>Voice</b>.'])}
+              'Close and reopen this app and choose the voice under <b>Voice</b>.'])}
           </section>
           <section class="group">
             <h2>Backup</h2>
@@ -1373,7 +1376,7 @@
     const sel = $('.voice-sel', node), note = $('.voice-note', node);
     const fill = () => {
       const vs = Speech.list(), cur = Speech.current();
-      sel.innerHTML = vs.length ? `<option value="system"${appSet.voice === 'system' ? ' selected' : ''}>Device default for French</option>` + vs.map((v, i) => `<option value="${i}"${v === cur ? ' selected' : ''}>${esc(v.name.replace(/\s*\((Enhanced|Premium|Natural)\)/i, ''))} · ${Speech.quality(v)[0]} · ${esc(v.lang.replace('_', '-'))}</option>`).join('')
+      sel.innerHTML = vs.length ? `<option value="system"${!cur ? ' selected' : ''}>Device default for French</option>` + vs.map((v, i) => `<option value="${i}"${v === cur ? ' selected' : ''}>${esc(v.name.replace(/\s*\((Enhanced|Premium|Natural)\)/i, ''))} · ${Speech.quality(v)[0]} · ${esc(v.lang.replace('_', '-'))}</option>`).join('')
         : `<option>${Speech.ok ? 'No French voice on this device yet' : 'This browser can’t speak'}</option>`;
       sel.disabled = !vs.length;
       note.textContent = !vs.length ? 'Audio is switched off until a French voice is installed. See Better Voices below.'
